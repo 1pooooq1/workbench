@@ -287,7 +287,7 @@
     (function () {
       var devBox = el('div', { style: 'padding:12px;margin-bottom:14px;border-radius:12px;background:#f1f8f3;border:1px solid #cdebd5' });
       devBox.appendChild(el('div', { style: 'font-weight:700;color:#1b7a3d;margin-bottom:6px' }, '📱 已连接设备'));
-      var masterHint = el('div', { class: 'small', style: 'margin-bottom:8px;color:#1b6b2f' }, '💡 指定一台设备当「主机」，只有主机会自动上传；其它设备只自动拉取，防止互相覆盖。');
+      var masterHint = el('div', { class: 'small', style: 'margin-bottom:8px;color:#1b6b2f' }, '💡 同步方式：所有设备「先拉后推、互相合并」，你在任何设备上的改动都会上传云端，也会自动合并其它设备的改动。主机标识目前仅作展示，不再限制上传。');
       devBox.appendChild(masterHint);
       var devList = el('div', { id: 'devList', class: 'small muted', style: 'margin-bottom:8px' }, '（暂无记录，点下方刷新按钮）');
       devBox.appendChild(devList);
@@ -298,16 +298,22 @@
       function refreshDevs() {
         devList.textContent = '加载中…';
         if (!(window.W && W.SupaSync && ls().url && c.pairCode)) { devList.textContent = '请先保存 Supabase 配置并创建配对码'; return; }
+        function timeoutPromise(ms) {
+          return new Promise(function (_, reject) { setTimeout(function () { reject(new Error('请求超时，请检查网络或重试')); }, ms); });
+        }
         // 先更新本机设备信息到本地 meta，再读取远程设备列表（不触发页面刷新）
-        W.SupaSync.fetchRemoteMeta().then(function (rem) {
-          if (rem && rem.devices && rem.devices.length) {
-            var m = meta();
-            m.devices = rem.devices;
-            setMeta(m);
-          }
-        }).catch(function () {}).then(function () {
-          return W.SupaSync.listDevices();
-        }).then(function (ds) {
+        Promise.race([
+          W.SupaSync.fetchRemoteMeta().then(function (rem) {
+            if (rem && rem.devices && rem.devices.length) {
+              var m = meta();
+              m.devices = rem.devices;
+              setMeta(m);
+            }
+          }).catch(function () {}).then(function () {
+            return W.SupaSync.listDevices();
+          }),
+          timeoutPromise(8000)
+        ]).then(function (ds) {
           if (!ds || !ds.length) { devList.innerHTML = '<span style="color:#1b6b2f">已记录本机设备；其它设备需各自打开并同步后才会显示。</span>'; return; }
           devList.innerHTML = '';
           ds.forEach(function (d) {
