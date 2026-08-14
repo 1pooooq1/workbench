@@ -1,4 +1,4 @@
-var CACHE = 'wb-v3';
+var CACHE = 'wb-v3-20260814';
 var PRE = [
   './', './index.html', './manifest.webmanifest', './assets/icon.svg', './assets/css/app.css',
   './assets/js/util.js', './assets/js/store.js', './assets/js/sync.js', './assets/js/sync-paircode.js', './assets/js/sync-supabase.js',

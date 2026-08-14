@@ -24,6 +24,23 @@
   function setMeta(m) { try { localStorage.setItem(META, JSON.stringify(m)); } catch (e) {} }
 
   function hasCrypto() { return !!(window.crypto && window.crypto.subtle); }
+  function cryptoErr(e, where) {
+    var name = (e && e.name) || '';
+    var msg = String((e && e.message) || e || '');
+    var detail = where ? ('[' + where + '] ') : '';
+    if (name === 'OperationError' || msg.indexOf('Operation') >= 0) {
+      detail += 'Web Crypto 操作失败';
+      if (!passphrase() || passphrase() === ':' || !code()) detail += '：配对码或二次密码为空，请检查同步设置';
+      else detail += '：可能当前浏览器/WebView 不支持 Web Crypto，建议用系统浏览器（Chrome/Safari）打开，或清除该站点缓存后重试';
+    } else if (name === 'NotSupportedError' || msg.indexOf('NotSupported') >= 0 || msg.indexOf('not supported') >= 0) {
+      detail += '当前浏览器不支持 Web Crypto（常见于微信/企业微信内置浏览器），请用系统 Chrome/Safari 打开工作台';
+    } else {
+      detail += msg;
+    }
+    var err = new Error(detail);
+    err.original = e;
+    return err;
+  }
   function b64(buf) {
     var bytes = new Uint8Array(buf);
     var len = bytes.byteLength;
@@ -39,21 +56,24 @@
   /* ---- 加密 / 解密 ---- */
   function deriveKey(pass, saltBuf) {
     return crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey'])
-      .then(function (k) { return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: saltBuf, iterations: 100000, hash: 'SHA-256' }, k, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']); });
+      .then(function (k) { return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: saltBuf, iterations: 100000, hash: 'SHA-256' }, k, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']); })
+      .catch(function (e) { throw cryptoErr(e, 'deriveKey'); });
   }
   function encrypt(obj, pass) {
     var salt = crypto.getRandomValues(new Uint8Array(16));
     var iv = crypto.getRandomValues(new Uint8Array(12));
     return deriveKey(pass, salt.buffer).then(function (key) {
       return crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, new TextEncoder().encode(JSON.stringify(obj)))
-        .then(function (ct) { return b64(salt) + ':' + b64(iv) + ':' + b64(ct); });
+        .then(function (ct) { return b64(salt) + ':' + b64(iv) + ':' + b64(ct); })
+        .catch(function (e) { throw cryptoErr(e, 'encrypt'); });
     });
   }
   function decrypt(blob, pass) {
-    var p = String(blob).split(':'); if (p.length !== 3) throw new Error('bad blob');
+    var p = String(blob).split(':'); if (p.length !== 3) throw new Error('密文格式错误，可能云端数据被损坏或配对码不匹配');
     return deriveKey(pass, unb64(p[0])).then(function (key) {
       return crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(unb64(p[1])) }, key, unb64(p[2]))
-        .then(function (pt) { return JSON.parse(new TextDecoder().decode(pt)); });
+        .then(function (pt) { return JSON.parse(new TextDecoder().decode(pt)); })
+        .catch(function (e) { throw cryptoErr(e, 'decrypt'); });
     });
   }
 
@@ -85,7 +105,10 @@
   }
 
   function push() {
-    if (!hasCrypto() || !apiUrl() || !code()) return Promise.resolve();
+    if (!hasCrypto()) { var m = meta(); m.lastError = '当前浏览器不支持 Web Crypto，请用系统浏览器（Chrome/Safari）打开'; setMeta(m); return Promise.resolve(); }
+    if (!apiUrl()) return Promise.resolve();
+    if (!code()) { var m = meta(); m.lastError = '配对码为空，请先在同步设置里输入配对码'; setMeta(m); return Promise.resolve(); }
+    if (!passphrase() || passphrase() === ':') { var m = meta(); m.lastError = '配对码或二次密码为空，无法加密'; setMeta(m); return Promise.resolve(); }
     var me = myDevice();
     var list = mergeDevice(meta().devices || [], me);
     var m = meta(); m.devices = list; setMeta(m);
@@ -105,7 +128,10 @@
     }).catch(function (e) { console.warn('[supa] push failed', e); var m = meta(); m.lastError = String((e && e.message) || e); setMeta(m); });
   }
   function pull() {
-    if (!hasCrypto() || !apiUrl() || !code()) return Promise.resolve();
+    if (!hasCrypto()) { var m = meta(); m.lastError = '当前浏览器不支持 Web Crypto，请用系统浏览器（Chrome/Safari）打开'; setMeta(m); return Promise.resolve(); }
+    if (!apiUrl()) return Promise.resolve();
+    if (!code()) { var m = meta(); m.lastError = '配对码为空，请先在同步设置里输入配对码'; setMeta(m); return Promise.resolve(); }
+    if (!passphrase() || passphrase() === ':') { var m = meta(); m.lastError = '配对码或二次密码为空，无法解密'; setMeta(m); return Promise.resolve(); }
     var local = meta().updatedAt || 0;
     return fetch(apiUrl() + '?code=eq.' + encodeURIComponent(code()) + '&select=code,data,updated_at', { method: 'GET', headers: headers() })
       .then(function (r) { if (r.ok) return r.json(); return r.text().then(function (body) { var msg = 'HTTP ' + r.status; try { var j = JSON.parse(body); if (j && j.message) msg += ' · ' + j.message; else if (j && j.error) msg += ' · ' + j.error; } catch (e) {} if (!body) msg += ' · （服务器无响应体，可能 URL 拼错 / 项目被暂停 / 网络被拦截）'; throw new Error(msg); }); })
@@ -170,7 +196,10 @@
   }
   // 仅拉取远程 payload 的 meta（devices / updatedAt），不导入数据，不刷新页面
   function fetchRemoteMeta() {
-    if (!hasCrypto() || !apiUrl() || !code()) return Promise.resolve(null);
+    if (!hasCrypto()) { var m = meta(); m.lastError = '当前浏览器不支持 Web Crypto，请用系统浏览器（Chrome/Safari）打开'; setMeta(m); return Promise.resolve(null); }
+    if (!apiUrl()) return Promise.resolve(null);
+    if (!code()) { var m = meta(); m.lastError = '配对码为空，请先在同步设置里输入配对码'; setMeta(m); return Promise.resolve(null); }
+    if (!passphrase() || passphrase() === ':') { var m = meta(); m.lastError = '配对码或二次密码为空，无法解密'; setMeta(m); return Promise.resolve(null); }
     return fetch(apiUrl() + '?code=eq.' + encodeURIComponent(code()) + '&select=code,data,updated_at', { method: 'GET', headers: headers() })
       .then(function (r) { if (r.ok) return r.json(); return r.text().then(function (body) { var msg = 'HTTP ' + r.status; try { var j = JSON.parse(body); if (j && j.message) msg += ' · ' + j.message; else if (j && j.error) msg += ' · ' + j.error; } catch (e) {} if (!body) msg += ' · （服务器无响应体）'; throw new Error(msg); }); })
       .then(function (rows) {
