@@ -1,0 +1,16 @@
+{
+  "name": "个人工作台",
+  "short_name": "工作台",
+  "description": "个人工作台 · 手机 / Pad / 电脑多端同步",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#eef7f6",
+  "theme_color": "#2db5a5",
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
