@@ -295,27 +295,11 @@
       drow.appendChild(btn('🔄 刷新设备列表', 'sm', refreshDevs));
       devBox.appendChild(drow);
       box.appendChild(devBox);
-      function refreshDevs() {
-        devList.textContent = '加载中…';
-        if (!(window.W && W.SupaSync && ls().url && c.pairCode)) { devList.textContent = '请先保存 Supabase 配置并创建配对码'; return; }
-        function timeoutPromise(ms) {
-          return new Promise(function (_, reject) { setTimeout(function () { reject(new Error('请求超时，请检查网络或重试')); }, ms); });
-        }
-        // 先更新本机设备信息到本地 meta，再读取远程设备列表（不触发页面刷新）
-        Promise.race([
-          W.SupaSync.fetchRemoteMeta().then(function (rem) {
-            if (rem && rem.devices && rem.devices.length) {
-              var m = meta();
-              m.devices = rem.devices;
-              setMeta(m);
-            }
-          }).catch(function () {}).then(function () {
-            return W.SupaSync.listDevices();
-          }),
-          timeoutPromise(8000)
-        ]).then(function (ds) {
-          if (!ds || !ds.length) { devList.innerHTML = '<span style="color:#1b6b2f">已记录本机设备；其它设备需各自打开并同步后才会显示。</span>'; return; }
-          devList.innerHTML = '';
+      function renderDevices(ds, extra) {
+        devList.innerHTML = '';
+        if (!ds || !ds.length) {
+          devList.innerHTML = '<span style="color:#1b6b2f">已记录本机设备；其它设备需各自打开并同步后才会显示。</span>';
+        } else {
           ds.forEach(function (d) {
             var line = el('div', { class: 'row', style: 'gap:6px;margin-bottom:6px;align-items:center;flex-wrap:wrap' });
             line.appendChild(el('span', { class: 'small' },
@@ -327,9 +311,43 @@
             line.appendChild(setBtn);
             devList.appendChild(line);
           });
-          var le = (W.SupaSync && W.SupaSync.lastError) ? W.SupaSync.lastError() : '';
-          if (le) devList.appendChild(el('div', { class: 'small', style: 'margin-top:6px;color:#c0392b' }, '⚠️ 上次同步出错：' + le + '（请检查 Supabase 表是否建好、URL/Key 是否正确）'));
-        }).catch(function (e) { devList.textContent = '刷新失败：' + (e && e.message || e); });
+        }
+        var le = (W.SupaSync && W.SupaSync.lastError) ? W.SupaSync.lastError() : '';
+        if (le) devList.appendChild(el('div', { class: 'small', style: 'margin-top:6px;color:#c0392b' }, '⚠️ 上次同步出错：' + le + '（请检查 Supabase 表是否建好、URL/Key 是否正确）'));
+        if (extra) devList.appendChild(el('div', { class: 'small', style: 'margin-top:6px;color:#666' }, extra));
+      }
+      function refreshDevs() {
+        devList.textContent = '加载中…';
+        if (!(window.W && W.SupaSync && ls().url && c.pairCode)) { devList.textContent = '请先保存 Supabase 配置并创建配对码'; return; }
+
+        // 第一步：零延迟显示本机设备（不依赖网络）
+        W.SupaSync.listDevices().then(function (localDs) {
+          renderDevices(localDs, '正在连接云端获取其它设备…');
+
+          // 第二步：异步拉远程设备列表，15 秒超时；超时仍保留本机列表
+          function timeoutPromise(ms) {
+            return new Promise(function (_, reject) { setTimeout(function () { reject(new Error('请求超时，请检查网络或重试')); }, ms); });
+          }
+          return Promise.race([
+            W.SupaSync.fetchRemoteMeta().then(function (rem) {
+              if (rem && rem.devices && rem.devices.length) {
+                var m = meta();
+                m.devices = rem.devices;
+                setMeta(m);
+              }
+            }).catch(function () {}).then(function () {
+              return W.SupaSync.listDevices();
+            }),
+            timeoutPromise(15000)
+          ]);
+        }).then(function (ds) {
+          renderDevices(ds, null);
+        }).catch(function (e) {
+          // 超时或网络错误：保留本机列表，只追加提示
+          W.SupaSync.listDevices().then(function (localDs) {
+            renderDevices(localDs, '⚠️ 刷新云端设备失败：' + (e && e.message || e) + '。请检查网络或稍后再试。');
+          });
+        });
       }
       function setMaster(id) {
         if (!(window.W && W.SupaSync)) return;

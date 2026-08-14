@@ -78,6 +78,12 @@
   }
 
   /* ---- Supabase REST ---- */
+  function fetchWithTimeout(url, opts, ms) {
+    ms = ms || 15000;
+    var ctrl = new AbortController();
+    var t = setTimeout(function () { ctrl.abort(); }, ms);
+    return fetch(url, Object.assign({}, opts, { signal: ctrl.signal })).then(function (r) { clearTimeout(t); return r; }).catch(function (e) { clearTimeout(t); if (e && e.name === 'AbortError') throw new Error('请求超时（' + ms + 'ms），请检查网络或稍后再试'); throw e; });
+  }
   function apiUrl() { var u = (ls().url || '').trim().replace(/\/$/, ''); return u ? u + '/rest/v1/' + TABLE : ''; }
   function headers() { return { 'Content-Type': 'application/json', 'apikey': ls().anonKey || '', 'Authorization': 'Bearer ' + (ls().anonKey || ''), 'Prefer': 'resolution=merge-duplicates' }; }
   function code() { return (cfg().pairCode || '').trim().toUpperCase(); }
@@ -114,7 +120,7 @@
     var m = meta(); m.devices = list; setMeta(m);
     var payload = { updatedAt: Date.now(), data: S.exportJSON(), devices: list };
     return encrypt(payload, passphrase()).then(function (ct) {
-      return fetch(apiUrl() + '?code=eq.' + encodeURIComponent(code()), {
+      return fetchWithTimeout(apiUrl() + '?code=eq.' + encodeURIComponent(code()), {
         method: 'POST', headers: headers(), body: JSON.stringify([{ code: code(), data: ct, updated_at: Date.now() }])
       }).then(function (r) {
         if (r.ok) { clearDirty(); var m = meta(); m.updatedAt = Date.now(); m.lastError = ''; setMeta(m); return; }
@@ -133,7 +139,7 @@
     if (!code()) { var m = meta(); m.lastError = '配对码为空，请先在同步设置里输入配对码'; setMeta(m); return Promise.resolve(); }
     if (!passphrase() || passphrase() === ':') { var m = meta(); m.lastError = '配对码或二次密码为空，无法解密'; setMeta(m); return Promise.resolve(); }
     var local = meta().updatedAt || 0;
-    return fetch(apiUrl() + '?code=eq.' + encodeURIComponent(code()) + '&select=code,data,updated_at', { method: 'GET', headers: headers() })
+    return fetchWithTimeout(apiUrl() + '?code=eq.' + encodeURIComponent(code()) + '&select=code,data,updated_at', { method: 'GET', headers: headers() })
       .then(function (r) { if (r.ok) return r.json(); return r.text().then(function (body) { var msg = 'HTTP ' + r.status; try { var j = JSON.parse(body); if (j && j.message) msg += ' · ' + j.message; else if (j && j.error) msg += ' · ' + j.error; } catch (e) {} if (!body) msg += ' · （服务器无响应体，可能 URL 拼错 / 项目被暂停 / 网络被拦截）'; throw new Error(msg); }); })
       .then(function (rows) {
         var row = rows && rows[0];
@@ -200,7 +206,7 @@
     if (!apiUrl()) return Promise.resolve(null);
     if (!code()) { var m = meta(); m.lastError = '配对码为空，请先在同步设置里输入配对码'; setMeta(m); return Promise.resolve(null); }
     if (!passphrase() || passphrase() === ':') { var m = meta(); m.lastError = '配对码或二次密码为空，无法解密'; setMeta(m); return Promise.resolve(null); }
-    return fetch(apiUrl() + '?code=eq.' + encodeURIComponent(code()) + '&select=code,data,updated_at', { method: 'GET', headers: headers() })
+    return fetchWithTimeout(apiUrl() + '?code=eq.' + encodeURIComponent(code()) + '&select=code,data,updated_at', { method: 'GET', headers: headers() })
       .then(function (r) { if (r.ok) return r.json(); return r.text().then(function (body) { var msg = 'HTTP ' + r.status; try { var j = JSON.parse(body); if (j && j.message) msg += ' · ' + j.message; else if (j && j.error) msg += ' · ' + j.error; } catch (e) {} if (!body) msg += ' · （服务器无响应体）'; throw new Error(msg); }); })
       .then(function (rows) {
         var row = rows && rows[0];
