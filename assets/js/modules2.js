@@ -337,7 +337,34 @@
   function newsToday(mount) {
     var s = S.get();
     if (!s.newsToday) s.newsToday = [];
-    var tabs = ['全部', '社会', '民生', '行业', '我的收藏'];
+
+    /* 每日按当天日期自动轮换的「示例」内容（纯前端、不依赖外网、不碰敏感题材） */
+    function genTodayDemo(date) {
+      var n = NEWS_TODAY_POOL.length;
+      var off = (parseInt(date.slice(8, 10), 10) + date.charCodeAt(5)) % n;
+      var pick = [];
+      for (var i = 0; i < 6; i++) {
+        var c = NEWS_TODAY_POOL[(off + i) % n];
+        pick.push({ id: U.uid(), title: c.title, summary: c.summary, src: c.src, cat: c.cat, time: c.time, url: c.url, date: date, fav: false, demo: true });
+      }
+      return pick;
+    }
+    function refreshDemo(force) {
+      var today = U.today();
+      if (!force && s.newsTodayDemoDate === today && s.newsTodayDemoTs) return;
+      /* 移除旧的示例内容；用户收藏过的示例（fav）予以保留，手动添加的永久保留 */
+      s.newsToday = (s.newsToday || []).filter(function (x) { return !x.demo || x.fav; });
+      s.newsToday = genTodayDemo(today).concat(s.newsToday);
+      s.newsTodayDemoDate = today;
+      s.newsTodayDemoTs = Date.now();
+      S.save();
+    }
+    refreshDemo(false);
+
+    /* 标签按已有分类动态生成（示例分类 + 用户自定义分类都纳入） */
+    var catSet = {};
+    s.newsToday.forEach(function (n) { if (n.cat) catSet[n.cat] = 1; });
+    var tabs = ['全部'].concat(Object.keys(catSet)).concat(['我的收藏']);
     var curTab = W.__newsTodayTab || '全部';
     if (tabs.indexOf(curTab) < 0) curTab = '全部';
 
@@ -353,14 +380,20 @@
         tabsRow.appendChild(chip);
       });
       top.appendChild(tabsRow);
-      var updateInfo = el('div', { class: 'news-update' }, '更新于 今日' + (s.newsToday[0] && s.newsToday[0].time ? s.newsToday[0].time : '09:00'));
+      var when = s.newsTodayDemoTs ? (function () { var d = new Date(s.newsTodayDemoTs); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); })() : '08:00';
+      var updateInfo = el('div', { class: 'news-update' }, '更新于 今日 ' + when + (s.newsTodayDemoDate ? (' · ' + s.newsTodayDemoDate) : '') + '（示例轮换·可点🔄更新）');
       top.appendChild(updateInfo);
       mount.appendChild(top);
 
-      /* 添加按钮 */
-      mount.appendChild(C.btn('＋ 添加今日时事', 'pri blk mb8', function () {
-        editItem(null);
-      }));
+      /* 添加 + 更新（示例内容每日按日期自动轮换，也可手动点🔄刷新） */
+      var btnRow = el('div', { style: 'display:flex;gap:8px;margin-bottom:8px' });
+      var addB = C.btn('＋ 添加今日时事', 'pri', function () { editItem(null); });
+      addB.style.flex = '1';
+      var refB = C.btn('🔄 更新示例', '', function () { refreshDemo(true); U.toast('已更新今日时事速览'); draw(); });
+      refB.style.flex = '1';
+      btnRow.appendChild(addB);
+      btnRow.appendChild(refB);
+      mount.appendChild(btnRow);
 
       /* 过滤 */
       var list = s.newsToday.filter(function (n) {
@@ -389,6 +422,7 @@
         if (n.src) ft.appendChild(el('span', { class: 'news-tag src' }, esc(n.src)));
         if (n.cat) ft.appendChild(el('span', { class: 'news-tag cat' }, esc(n.cat)));
         if (n.time) ft.appendChild(el('span', { class: 'news-tag time' }, esc(n.time)));
+        if (n.demo) ft.appendChild(el('span', { class: 'news-tag cat', style: 'opacity:.65' }, '示例'));
         c.appendChild(ft);
 
         /* 整卡点击 → 跳转原文；按钮阻止冒泡 */
@@ -441,6 +475,35 @@
     '民生': ['多地出台措施稳就业促增收', '医保目录调整惠及更多患者', '教育减负政策落地见效', '春运客流创新高出行更便捷', '养老服务体系持续完善', '食品安全监管力度再加强', '保障性住房建设稳步推进', '气象部门发布最新天气预警', '文旅消费市场持续升温', '社区服务便民举措获好评'],
     '热点': ['热搜话题引发全网热议', '正能量事件温暖人心', '权威辟谣澄清不实信息', '突发事件最新进展通报', '公众人物回应社会关切', '城市新地标正式亮相', '传统文化焕发新活力', '科普知识刷屏朋友圈', '暖心故事传递真情', '实用生活指南受追捧']
   };
+
+  /* 今日时事速览：中性「示例」内容池（纯前端、按日期轮换、不碰政治敏感题材、不联网）
+     明确标注为示例占位，可在卡片上点编辑替换为真实新闻。 */
+  var NEWS_TODAY_POOL = [
+    { title: '国产开源大模型发布新版本，推理效率提升约三成', summary: '多家团队联合发布新一代开源大模型，官方测试显示在同等算力下推理速度提升约 30%，并优化了长文本与多语言支持，已向开发者开放权重下载。', src: '科技前沿', cat: '科技', time: '08:00', url: 'https://www.news.cn/' },
+    { title: '新一代折叠屏手机上市，机身轻薄度再创新低', summary: '厂商发布最新折叠屏旗舰，展开厚度降至约 4.5 毫米，铰链寿命提升至 50 万次，并配备高亮度护眼屏，首销预约量同比走高。', src: '科技前沿', cat: '科技', time: '08:05', url: 'https://www.news.cn/' },
+    { title: '商业航天企业完成一箭多星发射，入轨精度获验证', summary: '民营火箭公司成功实施一箭多星发射，将多颗遥感与通信试验卫星送入预定轨道，入轨精度达到设计指标，商业发射节奏进一步加快。', src: '科技前沿', cat: '科技', time: '08:10', url: 'https://www.news.cn/' },
+    { title: '人形机器人量产线投产，单台成本下降明显', summary: '首条人形机器人小批量量产线正式投产，通过模块化设计与国产供应链替代，整机成本较样机下降约四成，主要面向工业巡检与仓储场景。', src: '科技前沿', cat: '科技', time: '08:15', url: 'https://www.news.cn/' },
+    { title: '量子通信骨干网扩容，城域间密钥分发更稳定', summary: '科研团队完成量子通信骨干网新一轮扩容，城域节点间密钥分发成功率与稳定性显著提升，为金融、政务等高安全场景提供底层支撑。', src: '科技前沿', cat: '科技', time: '08:20', url: 'https://www.news.cn/' },
+    { title: '前7月社会消费品零售总额稳步回升，服务消费亮眼', summary: '统计数据显示，前 7 月社会消费品零售总额同比增长，其中餐饮、文旅、健身等服务类消费增速领先，居民消费结构持续升级。', src: '财经观察', cat: '经济', time: '08:25', url: 'https://www.news.cn/' },
+    { title: '新能源汽车出口保持高增长，海外市场份额扩大', summary: '行业报告显示，新能源汽车出口延续高增长态势，在欧洲与东南亚市场渗透率提升，电池与智能化配置成为主要竞争力。', src: '财经观察', cat: '经济', time: '08:30', url: 'https://www.news.cn/' },
+    { title: '暑期文旅消费火热，多地推出惠民门票政策', summary: '暑期出行旺季带动文旅消费，多个景区推出夜间门票优惠与联票折扣，博物馆、演艺市场客流同比增长明显。', src: '财经观察', cat: '经济', time: '08:35', url: 'https://www.news.cn/' },
+    { title: '快递业务量再创新高，农村寄递网络持续完善', summary: '邮政数据显示快递日均处理量再创新高，村级寄递物流综合服务站覆盖率提升，农产品上行与工业品下乡双向通道进一步畅通。', src: '财经观察', cat: '经济', time: '08:40', url: 'https://www.news.cn/' },
+    { title: '人工智能带动算力需求，数据中心绿色化提速', summary: '随着大模型应用落地，智算中心建设升温，液冷、余热回收等节能技术加速普及，单位算力能耗持续下降。', src: '财经观察', cat: '经济', time: '08:45', url: 'https://www.news.cn/' },
+    { title: '多地发布高温健康提示，建议错峰户外作业', summary: '气象部门联合卫健机构发布高温健康提示，建议户外劳动者避开正午时段、保证补水与休息，重点人群注意防暑降温。', src: '生活指南', cat: '生活', time: '08:50', url: 'https://www.news.cn/' },
+    { title: '夏季用电高峰来临，电网负荷创年内新高', summary: '受持续高温影响，多地电网负荷创年内新高，电力系统通过跨省互济与需求响应保障供应，未出现大面积限电。', src: '生活指南', cat: '生活', time: '08:55', url: 'https://www.news.cn/' },
+    { title: '城市夜经济升温，便民集市延长营业时间', summary: '多个城市延长便民集市与特色街区营业时间，引入非遗展演与轻餐饮，带动周边就业与在地消费。', src: '生活指南', cat: '生活', time: '09:00', url: 'https://www.news.cn/' },
+    { title: '新版生活垃圾分类指南发布，可回收物范围扩围', summary: '住建部门更新生活垃圾分类指引，进一步明确可回收物与有害垃圾界定，并在部分社区试点智能回收箱。', src: '生活指南', cat: '生活', time: '09:05', url: 'https://www.news.cn/' },
+    { title: '台风路径调整，东南沿海需防范强风雨', summary: '气象台更新台风预报，路径较此前偏东，提醒沿海渔船回港避风、加固设施，相关部门启动防汛防风应急响应。', src: '天气通', cat: '天气', time: '09:10', url: 'https://www.news.cn/' },
+    { title: '北方迎来入汛后最强降雨，多地启动应急响应', summary: '气象部门预报北方部分地区将出现入汛以来最强降雨过程，需防范城市内涝与山洪地质灾害，出行注意安全。', src: '天气通', cat: '天气', time: '09:15', url: 'https://www.news.cn/' },
+    { title: '南方持续晴热，气象台发布高温橙色预警', summary: '南方多地连续晴热，气象台发布高温橙色预警，提醒公众减少午后户外活动，户外作业做好防暑措施。', src: '天气通', cat: '天气', time: '09:20', url: 'https://www.news.cn/' },
+    { title: '国家游泳队世锦赛斩获多金，年轻选手表现抢眼', summary: '游泳世锦赛落幕，国家游泳队收获多枚金牌，多名"00 后"选手刷新个人最好成绩，梯队建设成效显现。', src: '体育周刊', cat: '体育', time: '09:25', url: 'https://www.news.cn/' },
+    { title: '足球联赛下半程开战，争冠保级悬念升级', summary: '足球顶级联赛下半程打响，积分榜中游竞争激烈，争冠与保级形势悬念升级，球迷关注度持续走高。', src: '体育周刊', cat: '体育', time: '09:30', url: 'https://www.news.cn/' },
+    { title: '马拉松大众参赛热情高涨，多地赛事名额秒罄', summary: '秋季马拉松进入报名季，多地赛事名额迅速报满，路跑经济带动训练、装备与文旅消费。', src: '体育周刊', cat: '体育', time: '09:35', url: 'https://www.news.cn/' },
+    { title: '博物馆暑期夜场预约火爆，文创产品成新宠', summary: '多家博物馆加开暑期夜场并上新文创，年轻观众占比提升，"展览+文创"带动文化消费新场景。', src: '文化视界', cat: '文化', time: '09:40', url: 'https://www.news.cn/' },
+    { title: '非遗市集进社区，传统手工艺走近年轻人', summary: '非物质文化遗产市集走进社区，剪纸、扎染、陶艺等传统技艺现场体验，吸引不少年轻人参与打卡。', src: '文化视界', cat: '文化', time: '09:45', url: 'https://www.news.cn/' },
+    { title: '国产动画电影票房口碑双丰收，传统文化焕新', summary: '暑期档一部国产动画电影票房与口碑双线走高，以传统神话为底色进行现代表达，带动周边与文旅联动。', src: '文化视界', cat: '文化', time: '09:50', url: 'https://www.news.cn/' },
+    { title: '专家建议暑期规律作息，青少年近视防控正当时', summary: '眼科专家建议暑期控制屏幕时长、增加户外活动，并定期视力检查，家校协同做好青少年近视防控。', src: '健康参考', cat: '健康', time: '09:55', url: 'https://www.news.cn/' }
+  ];
 
   /* ============ 时事速览：聚合资讯源热点榜单 ============ */
   function newsSpeed(mount) {
