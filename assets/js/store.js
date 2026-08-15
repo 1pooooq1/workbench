@@ -126,6 +126,7 @@
     { id: 'kaoyan', name: '考研', icon: '🎓', visible: true },
     { id: 'english', name: '英语', icon: '🔤', visible: true },
     { id: 'wordstudy', name: '背单词', icon: '📚', visible: true },
+    { id: 'kaoyan-listen', name: '考研精听', icon: '🎧', visible: true },
     { id: 'reading', name: '阅读', icon: '📖', visible: true },
     { id: 'art', name: '艺术', icon: '🎨', visible: true },
     { id: 'news', name: '每日时事', icon: '📰', visible: true },
