@@ -79,6 +79,7 @@
     var s = S.get();
     U.sheet('设置', [
       { v: 'sync', text: '多端同步设置', icon: '🔄' },
+      { v: 'tts', text: '朗读发音设置（调自然音）', icon: '🔊' },
       { v: 'display', text: '显示大小（手机/Pad/电脑通用）', icon: '🔍' },
       { v: 'city', text: '城市与天气定位', icon: '📍' },
       { v: 'ai', text: 'AI 工具入口管理', icon: '🤖' },
@@ -87,6 +88,7 @@
       { v: 'about', text: '关于工作台', icon: 'ℹ️' }
     ]).then(function (a) {
       if (a === 'sync') openSync();
+      else if (a === 'tts') openTtsSettings();
       else if (a === 'display') {
         var cur = (S.get().ui && S.get().ui.scale) || 'standard';
         U.sheet('显示大小', [
@@ -114,6 +116,60 @@
         html: '<div class="small" style="line-height:1.8;color:#6b7285">个人工作台 · 多端 App<br>数据默认保存在本机浏览器（localStorage + IndexedDB）。<br>开启「远程地址同步」后，多台设备填同一个地址即可实时同步；也可随时「导出备份」。<br><br>发音、语音识别、天气需要联网与浏览器权限；AI 功能通过一键复制 + 跳转对应 AI 网站完成。</div>'
       });
     });
+  }
+
+  /* ---- 朗读发音设置：挑选自然发音人 + 语速/语调 ---- */
+  function openTtsSettings() {
+    var S0 = S.get(); if (!S0.tts) S0.tts = {};
+    var mask = el('div', { class: 'mask' });
+    var box = el('div', { class: 'modal' });
+    box.appendChild(el('h3', null, '朗读发音设置'));
+    var body = el('div');
+    body.appendChild(el('div', { class: 'small muted mb8' }, '朗读生硬多是设备默认发音所致。挑一个自然的声音、调一下语速语调即可明显改善。'));
+    var f1 = el('div', { class: 'fld' }); f1.appendChild(el('label', null, '发音人（优先挑自然音）'));
+    var sel = el('select', { class: 'inp' }); f1.appendChild(sel); body.appendChild(f1);
+    var f2 = el('div', { class: 'fld' });
+    var lab2 = el('label', null, '语速 ' + (S0.tts.rate != null ? (+S0.tts.rate).toFixed(2) : '0.95'));
+    f2.appendChild(lab2);
+    var rate = el('input', { type: 'range', min: '0.5', max: '1.6', step: '0.05', style: 'width:100%' });
+    rate.value = S0.tts.rate != null ? S0.tts.rate : 0.95;
+    rate.oninput = function () { lab2.textContent = '语速 ' + (+rate.value).toFixed(2); };
+    f2.appendChild(rate); body.appendChild(f2);
+    var f3 = el('div', { class: 'fld' });
+    var lab3 = el('label', null, '语调 ' + (S0.tts.pitch != null ? (+S0.tts.pitch).toFixed(2) : '1.00'));
+    f3.appendChild(lab3);
+    var pitch = el('input', { type: 'range', min: '0.5', max: '1.8', step: '0.05', style: 'width:100%' });
+    pitch.value = S0.tts.pitch != null ? S0.tts.pitch : 1.0;
+    pitch.oninput = function () { lab3.textContent = '语调 ' + (+pitch.value).toFixed(2); };
+    f3.appendChild(pitch); body.appendChild(f3);
+    box.appendChild(body);
+    var ft = el('div', { class: 'modal-ft' });
+    var cancel = el('button', { class: 'btn' }, '取消');
+    var test = el('button', { class: 'btn' }, '🔊 试听');
+    var ok = el('button', { class: 'btn pri' }, '保存');
+    ft.appendChild(cancel); ft.appendChild(test); ft.appendChild(ok);
+    box.appendChild(ft); mask.appendChild(box); U.$('#modalRoot').appendChild(mask);
+    function fill() {
+      var vs = U.getVoices();
+      sel.innerHTML = '';
+      sel.appendChild(el('option', { value: '' }, '（自动选最佳自然音）'));
+      vs.forEach(function (v) {
+        var o = el('option', { value: v.voiceURI }, (v.name || '未知') + ' · ' + (v.lang || ''));
+        if ((S0.tts.voiceURI || '') === v.voiceURI) o.selected = true;
+        sel.appendChild(o);
+      });
+      if (!vs.length) sel.appendChild(el('option', { value: '' }, '（本机暂无可选发音，已用系统默认）'));
+    }
+    fill(); U.onVoicesReady(fill);
+    test.onclick = function () { U.speak('Hello, this is a natural pronunciation example.', 'en-US', +rate.value, +pitch.value, sel.value); };
+    cancel.onclick = function () { mask.remove(); };
+    ok.onclick = function () {
+      S0.tts.voiceURI = sel.value || '';
+      S0.tts.rate = +rate.value;
+      S0.tts.pitch = +pitch.value;
+      S.save(); mask.remove(); U.toast('朗读发音设置已保存');
+    };
+    mask.onclick = function (e) { if (e.target === mask) mask.remove(); };
   }
 
   function openSync() {

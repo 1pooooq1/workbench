@@ -33,6 +33,16 @@
     return e;
   }
   function btn(t, cls, fn) { var b = el('button', { class: 'btn ' + (cls || 'sm') }, t); if (fn) b.onclick = fn; return b; }
+  function phRow(w) {
+    if (!w || !w.ph) return null;
+    var row = el('div', { class: 'row', style: 'gap:6px;align-items:center;margin:4px 0' });
+    row.appendChild(el('span', { class: 'small muted' }, '音标：'));
+    var ph = el('span', { style: 'cursor:pointer;color:#5b6cff' }, esc(w.ph));
+    ph.title = '点击朗读';
+    ph.onclick = function () { U.speak(w.word, S.get().wordAccent, 1); };
+    row.appendChild(ph);
+    return row;
+  }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function empty(msg) { return el('div', { class: 'empty' }, '<span class="ei">📚</span>' + esc(msg)); }
   function sep(t) { return el('div', { class: 'sep', style: 'margin:14px 0 10px;font-weight:700;color:#888' }, t); }
@@ -58,6 +68,8 @@
     if (!s.listenShowWord) s.listenShowWord = false;
     if (!s.listenShowMean) s.listenShowMean = false;
     if (!s.listenShowPh) s.listenShowPh = false;
+    if (!s.wordSeqCursor) s.wordSeqCursor = {};
+    if (!s.aiPassageLen) s.aiPassageLen = 200;
   }
   function dayOffset(n) { var d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime() + n * 86400000; }
   function today() { return U.today(); }
@@ -228,6 +240,7 @@
       card.appendChild(h);
       var ops = el('div', { class: 'row', style: 'gap:6px;flex-wrap:wrap' });
       ops.appendChild(btn('☑ 选词背诵', 'sm pri', function () { selectWords(g, view); }));
+      ops.appendChild(btn('🔁 顺序续背', 'sm', function () { seqPick(g, view); }));
       if (!g._live) {
         ops.appendChild(btn('📝 粘贴文本', 'sm', function () {
           U.modal({ title: '导入单词（文档识别）', fields: [{ key: 'src', label: '粘贴文本：每行一个单词，或「单词  释义」用空格分开', ph: 'apple 苹果\nbook 书', type: 'textarea' }], okText: '加入词框' })
@@ -239,6 +252,7 @@
         ops.appendChild(btn('🗑 删除词框', 'sm dan', function () { U.confirm('删除词框「' + g.name + '」及其单词？').then(function (ok) { if (ok) { s.wordDocs = s.wordDocs.filter(function (x) { return x.id !== g.id; }); S.save(); render(view); } }); }));
       } else {
         ops.appendChild(btn('🔄 同步', 'sm', function () { render(view); U.toast('已与英语生词本同步'); }));
+        ops.appendChild(btn('🔁 顺序续背', 'sm', function () { seqPick(g, view); }));
         ops.appendChild(btn('ℹ 说明', 'sm', function () { U.toast('英语阅读/背词里收藏的生词，会同步出现在这里；在这里熟记归档后，会自动从英语生词本移除'); }));
       }
       card.appendChild(ops);
@@ -303,6 +317,28 @@
       curTab = 'study'; render(view);
     });
   }
+  /* 顺序自动续背：从当前游标+1 取 N 个（N=每日目标）加入今日计划，并推进游标 */
+  function seqPick(g, view) {
+    var s = S.get();
+    if (!s.wordSeqCursor) s.wordSeqCursor = {};
+    var goal = s.wordGoal || 30;
+    var words = g.words || [];
+    if (!words.length) { U.toast('词框为空，请先导入单词'); return; }
+    var cur = s.wordSeqCursor[g.id] || 0;
+    if (cur >= words.length) cur = 0; // 背完一轮后从开头循环
+    var taken = 0;
+    var plan = s.wordPlan[today()] || (s.wordPlan[today()] = []);
+    for (var i = cur; i < words.length && taken < goal; i++) {
+      var w = words[i];
+      plan.push({ key: g.id + ':' + w.word, word: w.word, ph: w.ph, mean: w.mean, ex: w.ex, groupId: g.id });
+      taken++;
+    }
+    s.wordSeqCursor[g.id] = cur + taken;
+    if (taken < goal && cur === 0) U.toast('词框不足 ' + goal + ' 词，已全部加入（共 ' + taken + '）');
+    else U.toast('已按序加入 ' + taken + ' 词，游标推进到 ' + s.wordSeqCursor[g.id]);
+    S.save();
+    curTab = 'study'; render(view);
+  }
   function deleteWords(g, view) {
     openWordPicker(g, '删除词框中的单词（勾选后删除，不可恢复）', '删除选中', function (keys) {
       if (!keys.length) { U.toast('未选择单词'); return; }
@@ -340,6 +376,10 @@
         .then(function (r) { if (r) { s.wordGoal = Math.max(1, parseInt(r.g, 10) || 30); S.save(); render(view); } });
     }));
     view.appendChild(top2);
+    var aiRow = el('div', { class: 'row mb8', style: 'gap:8px;flex-wrap:wrap;align-items:center' });
+    aiRow.appendChild(btn('✨ AI 生成配套短文', 'pri sm', function () { genPassage(view); }));
+    aiRow.appendChild(btn('⚙ AI 设置', 'sm', function () { openAISettings(view); }));
+    view.appendChild(aiRow);
     if (s.wordMode === 'listen') {
       var top3 = el('div', { class: 'row mb8', style: 'gap:8px;flex-wrap:wrap;align-items:center' });
       top3.appendChild(el('span', { class: 'small' }, '显示'));
@@ -401,6 +441,7 @@
       if (s.wordMode === 'spell') {
         var ph = el('div', { style: 'font-size:22px;font-weight:700;margin:6px 0;filter:blur(9px);user-select:none' }, esc(w.word));
         card.appendChild(ph);
+        var phs = phRow(w); if (phs) card.appendChild(phs);
         if (w.mean) card.appendChild(el('div', { class: 'small', style: 'margin-bottom:6px' }, '释义：' + esc(w.mean)));
         var inp = el('input', { class: 'inp', style: 'margin:8px 0', placeholder: '输入英文拼写' });
         card.appendChild(inp);
@@ -415,6 +456,7 @@
         inp.onkeydown = function (e) { if (e.key === 'Enter') check.click(); };
       } else if (s.wordMode === 'mean') {
         card.appendChild(el('div', { style: 'font-size:22px;font-weight:700;margin:6px 0' }, esc(w.word)));
+        var phm = phRow(w); if (phm) card.appendChild(phm);
         var meanBox = el('div', { class: 'small', style: 'display:none;margin-bottom:6px' }, '释义：' + esc(w.mean || '（无）'));
         card.appendChild(meanBox);
         card.appendChild(btn('显示释义', 'sm', function () { meanBox.style.display = meanBox.style.display === 'none' ? 'block' : 'none'; }));
@@ -454,6 +496,7 @@
         sp.appendChild(btn('🔊 英式', 'sm', function () { U.speak(w.word, 'en-GB', 1); }));
         card.appendChild(sp);
         if (w.mean) card.appendChild(el('div', { class: 'small', style: 'margin-bottom:4px' }, '释义：' + esc(w.mean)));
+        var phb = phRow(w); if (phb) card.appendChild(phb);
         var exBox = el('div', { class: 'small', style: 'display:none;margin-bottom:4px' }, '例句：' + esc(w.ex || '（无）'));
         card.appendChild(exBox);
         card.appendChild(btn('👁 隐藏/显示英文', 'sm', function () { big.style.visibility = big.style.visibility === 'hidden' ? 'visible' : 'hidden'; }));
@@ -521,6 +564,7 @@
   function renderWrong(view) {
     var s = S.get(); var ws = s.wrong || [];
     view.appendChild(sep('———— 错题本 ————'));
+    view.appendChild(btn('🎯 开始专项背诵', 'pri mb8', function () { startWrongDrill(view); }));
     if (!ws.length) { view.appendChild(empty('错题本为空。答错的词会自动收集到这里，重点突破顽固词。')); return; }
     ws.forEach(function (w) {
       var card = el('div', { class: 'card', style: 'padding:10px' });
@@ -535,6 +579,46 @@
     });
   }
 
+  /* ---- 错题本专项背诵 ---- */
+  function startWrongDrill(view) {
+    var s = S.get(); var queue = (s.wrong || []).slice();
+    if (!queue.length) { U.toast('错题本为空'); return; }
+    var host = el('div'); view.innerHTML = ''; view.appendChild(host);
+    var pos = 0, repeat = [];
+    function back() { curTab = 'wrong'; render(view); }
+    function done() {
+      host.innerHTML = '';
+      host.appendChild(el('div', { class: 'card', style: 'padding:14px;text-align:center' },
+        '🎯 专项背诵完成！错题本还剩 ' + ((S.get().wrong) || []).length + ' 个'));
+      host.appendChild(btn('返回错题本', 'pri sm', back));
+    }
+    function next() {
+      if (pos < queue.length) return show(queue[pos]);
+      if (repeat.length) { queue = repeat.slice(); repeat = []; pos = 0; return show(queue[pos]); }
+      done();
+    }
+    function show(w) {
+      host.innerHTML = '';
+      var card = el('div', { class: 'card', style: 'padding:12px' });
+      card.appendChild(el('div', { style: 'font-size:22px;font-weight:700;margin:6px 0' }, esc(w.word)));
+      var phr = phRow(w); if (phr) card.appendChild(phr);
+      if (w.mean) card.appendChild(el('div', { class: 'small', style: 'margin-bottom:4px' }, '释义：' + esc(w.mean)));
+      var sp = el('div', { class: 'row', style: 'gap:6px;margin:6px 0' });
+      sp.appendChild(btn('🔊 美式', 'sm', function () { U.speak(w.word, 'en-US', 1); }));
+      sp.appendChild(btn('🔊 英式', 'sm', function () { U.speak(w.word, 'en-GB', 1); }));
+      card.appendChild(sp);
+      var big = el('div', { class: 'ws-big' });
+      big.appendChild(btn('✅ 记得', 'pri', function () { removeWrong(w); pos++; next(); }));
+      big.appendChild(btn('❌ 不记得', 'dan', function () { U.speak(w.word, S.get().wordAccent, 1); if (repeat.indexOf(w) < 0) repeat.push(w); pos++; next(); }));
+      card.appendChild(big);
+      var sub = el('div', { class: 'ws-sub' });
+      sub.appendChild(btn('⭐ 已掌握', 'sm', function () { addFamiliar(w.key, w); removeWrong(w); pos++; next(); }));
+      card.appendChild(sub);
+      host.appendChild(card);
+    }
+    function removeWrong(w) { var s2 = S.get(); s2.wrong = (s2.wrong || []).filter(function (x) { return x.key !== w.key; }); S.save(); }
+    next();
+  }
   /* ---- 熟词库 ---- */
   function renderFam(view) {
     var s = S.get(); var ws = s.familiar || [];
@@ -561,7 +645,8 @@
       familiar: s.familiar || [], wrong: s.wrong || [],
       wordGoal: s.wordGoal, wordMode: s.wordMode, wordAccent: s.wordAccent,
       wordDone: s.wordDone || {}, wordShuffle: !!s.wordShuffle,
-      listenShowWord: !!s.listenShowWord, listenShowMean: !!s.listenShowMean, listenShowPh: !!s.listenShowPh
+      listenShowWord: !!s.listenShowWord, listenShowMean: !!s.listenShowMean, listenShowPh: !!s.listenShowPh,
+      wordSeqCursor: s.wordSeqCursor || {}, aiPassage: s.aiPassage || '', aiPassageLen: s.aiPassageLen || 200
     };
     try {
       var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -593,6 +678,9 @@
           if (typeof o.listenShowWord === 'boolean') s.listenShowWord = o.listenShowWord;
           if (typeof o.listenShowMean === 'boolean') s.listenShowMean = o.listenShowMean;
           if (typeof o.listenShowPh === 'boolean') s.listenShowPh = o.listenShowPh;
+          if (o.wordSeqCursor) s.wordSeqCursor = o.wordSeqCursor;
+          if (o.aiPassageLen) s.aiPassageLen = o.aiPassageLen;
+          if (o.aiPassage) s.aiPassage = o.aiPassage;
           S.save(); render(VIEW); U.toast('已恢复背单词备份');
         } catch (e) { U.toast('备份文件格式不正确'); }
       };
@@ -619,6 +707,56 @@
     renderDocs(VIEW);
   }
 
+  /* ---- AI 配套短文生成（直连大模型，兼容 OpenAI 接口）---- */
+  function openAISettings(view) {
+    var s = S.get(); if (!s.cfg) s.cfg = {}; var c = s.cfg;
+    U.modal({ title: '配置 AI 生成短文', fields: [
+      { key: 'api', label: 'API 地址(baseURL，不含 /chat/completions)', value: c.aiApi || 'https://api.deepseek.com/v1', ph: 'DeepSeek: https://api.deepseek.com/v1' },
+      { key: 'key', label: 'API Key', value: c.aiKey || '', ph: 'sk-...', type: 'password' },
+      { key: 'model', label: '模型名', value: c.aiModel || 'deepseek-chat', ph: 'deepseek-chat / gpt-4o-mini' }
+    ], okText: '保存' }).then(function (r) {
+      if (r) { c.aiApi = (r.api || '').trim(); c.aiKey = (r.key || '').trim(); c.aiModel = (r.model || '').trim(); S.save(); U.toast('AI 配置已保存'); }
+    });
+  }
+  function genPassage(view) {
+    var s = S.get();
+    var plan = s.wordPlan[today()] || [];
+    if (!plan.length) { U.toast('今天还没有背诵计划，先去「词库」选词或顺序续背'); return; }
+    var words = []; var have = {};
+    plan.forEach(function (w) { if (!have[w.word]) { have[w.word] = 1; words.push(w.word); } });
+    var base = (s.cfg && s.cfg.aiApi) || '', key = (s.cfg && s.cfg.aiKey) || '', model = (s.cfg && s.cfg.aiModel) || '';
+    if (!base || !key || !model) { openAISettings(view); U.toast('请先配置 AI（服务商/Key/模型）'); return; }
+    U.modal({ title: '生成配套英文短文', fields: [{ key: 'len', label: '短文字数（英文词数，默认 200）', value: s.aiPassageLen || 200, type: 'number' }], okText: '生成' })
+      .then(function (r) {
+        if (!r) return;
+        var n = Math.max(50, parseInt(r.len, 10) || 200); s.aiPassageLen = n; S.save();
+        doGen(words, n, base, key, model, view);
+      });
+  }
+  function doGen(words, n, base, key, model, view) {
+    var prompt = '请用以下英语单词写一段自然、连贯、适合英语学习的英文短文，总长度约 ' + n + ' 个英文单词。要求：1) 必须包含并自然使用这些单词（可用时态/单复数变形）：' + words.join(', ') + '；2) 主题积极、易懂，适合中国英语学习者；3) 只输出英文短文本身，不要解释、不要列表、不要中文、不要 Markdown。';
+    var url = base.replace(/\/$/, '') + '/chat/completions';
+    U.toast('正在生成短文（含 ' + words.length + ' 个生词）…');
+    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key }, body: JSON.stringify({ model: model, messages: [{ role: 'system', content: 'You are a helpful English writing assistant for Chinese English learners.' }, { role: 'user', content: prompt }], temperature: 0.8, max_tokens: Math.min(2000, n * 8) }) })
+      .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error('HTTP ' + r.status + ' · ' + t.slice(0, 200)); }); return r.json(); })
+      .then(function (j) { var txt = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content; if (!txt) throw new Error('模型返回为空'); showPassage(txt.trim(), words.length, view); })
+      .catch(function (e) { U.toast('生成失败：' + (e && e.message || e) + '（检查 Key/模型，或该服务商是否支持浏览器跨域）'); });
+  }
+  function showPassage(txt, cnt, view) {
+    var s = S.get(); s.aiPassage = txt; S.save();
+    var host = el('div'); view.innerHTML = ''; view.appendChild(host);
+    var card = el('div', { class: 'card', style: 'padding:14px' });
+    card.appendChild(el('div', { style: 'font-weight:700;margin-bottom:8px' }, '✨ 今日配套英文短文（含 ' + cnt + ' 个生词）'));
+    if (s.aiPassageLen) card.appendChild(el('div', { class: 'small muted', style: 'margin-bottom:8px' }, '目标词数 ' + s.aiPassageLen));
+    var p = el('div', { class: 'ws-passage', style: 'line-height:1.8;white-space:pre-wrap;font-size:15px' }, esc(txt));
+    card.appendChild(p);
+    var ctr = el('div', { class: 'row', style: 'gap:8px;margin-top:10px;flex-wrap:wrap' });
+    ctr.appendChild(btn('🔊 朗读全文', 'pri sm', function () { U.speak(txt, s.wordAccent, 1); }));
+    ctr.appendChild(btn('📋 复制', 'sm', function () { try { navigator.clipboard.writeText(txt); U.toast('已复制'); } catch (e) { U.toast('复制失败'); } }));
+    ctr.appendChild(btn('↩ 返回背诵', 'sm', function () { curTab = 'study'; render(view); }));
+    card.appendChild(ctr);
+    host.appendChild(card);
+  }
   W.P.wordstudy = function (view) { render(view); };
   if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', function () { setTimeout(ensureNav, 0); });
   else setTimeout(ensureNav, 0);

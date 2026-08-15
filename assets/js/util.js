@@ -266,6 +266,44 @@ W.U = (function () {
   function ttsSupported() {
     return !!(window.speechSynthesis && typeof SpeechSynthesisUtterance !== 'undefined');
   }
+  /* 缓存可用发音人；iOS/Safari 声音为异步加载，需监听 voiceschanged */
+  var _voices = [];
+  var _voiceCbs = [];
+  function loadVoices() {
+    try { _voices = window.speechSynthesis.getVoices() || []; } catch (e) { _voices = []; }
+    _voiceCbs.forEach(function (c) { try { c(_voices); } catch (e) {} });
+  }
+  if (ttsSupported()) { loadVoices(); try { window.speechSynthesis.onvoiceschanged = loadVoices; } catch (e) {} }
+  function getVoices() { return _voices.slice(); }
+  function onVoicesReady(cb) { if (!cb) return; if (_voices.length) { try { cb(_voices); } catch (e) {} } _voiceCbs.push(cb); }
+  /* 智能优选自然度高的发音人：优先神经网络/增强音色，避开机械默认音（Pico / 旧版） */
+  function pickVoice(lang) {
+    var vs = _voices.length ? _voices : (ttsSupported() ? (window.speechSynthesis.getVoices() || []) : []);
+    if (!vs.length) return null;
+    var pref = (lang || 'en').split('-')[0].toLowerCase();
+    var match = vs.filter(function (v) { return v.lang && v.lang.toLowerCase().indexOf(pref) === 0; });
+    if (!match.length) return null;
+    var rank = function (n) {
+      n = (n || '').toLowerCase();
+      if (/neural|enhanced|natural|premium|online|neural tts/.test(n)) return 4;
+      if (/(samantha|google|aria|jenny|daniel|karen|victoria|monica|zira|huihui|yaoyao|tingting|xiaoxiao|云健|晓睿|云希|晓萱|晓妍|晓涵|云扬|晓宁|佳佳|小宇)/.test(n)) return 3;
+      if (/(microsoft|apple|siri|united kingdom|united states)/.test(n)) return 2;
+      return 0;
+    };
+    match.sort(function (a, b) { return rank(b.name) - rank(a.name); });
+    return match[0];
+  }
+  /* 应用发音人：优先用全局设置里指定的 voiceURI，否则智能优选；并套用语速/语调 */
+  function applyVoice(u, lang, voiceURI) {
+    try {
+      var s = S.get(); var t = s.tts || {};
+      var uri = voiceURI || t.voiceURI;
+      if (uri) { var f = _voices.filter(function (v) { return v.voiceURI === uri; })[0]; if (f) { u.voice = f; return; } }
+      var v = pickVoice(lang); if (v) u.voice = v;
+    } catch (e) {}
+  }
+  function ttsRate(rate) { var s = S.get(); var t = s.tts || {}; return (t.rate != null) ? +t.rate : (rate || 1); }
+  function ttsPitch() { var s = S.get(); var t = s.tts || {}; return (t.pitch != null) ? +t.pitch : 1; }
   /* 在线 TTS 兜底：原生朗读不可用时，用网络发音服务自动适配
      优先级：有道词典发音（国内可直连，英/中均支持）→ Google 翻译发音（兜底）
      任一可达即用，全部失败才提示。 */
@@ -294,10 +332,11 @@ W.U = (function () {
     }
     return tryUrl(0);
   }
-  function speak(text, lang, rate) {
+  function speak(text, lang, rate, pitch, voiceURI) {
     text = String(text || '').trim();
     if (!text) return false;
-    lang = lang || 'en-US'; rate = rate || 1;
+    lang = lang || 'en-US';
+    var fr = ttsRate(rate), fp = ttsPitch();
     /* 1) 优先原生 Web Speech API（iOS Safari / Android Chrome / 桌面均支持） */
     if (ttsSupported()) {
       try {
@@ -307,22 +346,15 @@ W.U = (function () {
         }
         window.speechSynthesis.cancel();
         var u = new SpeechSynthesisUtterance(text);
-        u.lang = lang; u.rate = rate;
-        /* 显式挑选与语言匹配的声音（尤其中文 zh），避免部分设备默认英文 voice 导致不发声 */
-        try {
-          var vs = window.speechSynthesis.getVoices() || [];
-          var pref = (lang || 'en').split('-')[0].toLowerCase();
-          for (var vi = 0; vi < vs.length; vi++) {
-            if (vs[vi] && vs[vi].lang && vs[vi].lang.toLowerCase().indexOf(pref) === 0) { u.voice = vs[vi]; break; }
-          }
-        } catch (e) {}
-        u.onerror = function () { onlineTTS(text, lang, rate); }; /* 原生异常 → 在线兜底（带变速） */
+        u.lang = lang; u.rate = fr; u.pitch = fp;
+        applyVoice(u, lang, voiceURI); /* 智能优选/手动指定自然发音人 */
+        u.onerror = function () { onlineTTS(text, lang, fr); }; /* 原生异常 → 在线兜底（带变速） */
         window.speechSynthesis.speak(u);
         return true;
       } catch (e) { /* 落到在线兜底 */ }
     }
     /* 2) 兜底：在线 TTS 音频（自动适配无原生朗读的 WebView，支持变速） */
-    return onlineTTS(text, lang, rate);
+    return onlineTTS(text, lang, fr);
   }
   function SR(lang) {
     var C = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -367,23 +399,20 @@ W.U = (function () {
   function speakToggle(text, lang, rate, btn) {
     text = String(text || '').trim();
     if (!text) return;
-    lang = lang || 'en-US'; rate = rate || 1;
+    lang = lang || 'en-US';
+    var fr = ttsRate(rate), fp = ttsPitch();
     if (_spk.active && _spk.text === text) { _spk.paused ? resumeSpeak() : pauseSpeak(); return; }
     if (_spk.active && _spk.active !== btn) _spkResetBtn(_spk.active); /* 切到别的文章 → 复位旧按钮 */
-    _spk.text = text; _spk.lang = lang; _spk.rate = rate; _spk.active = btn; _spk.paused = false;
+    _spk.text = text; _spk.lang = lang; _spk.rate = fr; _spk.active = btn; _spk.paused = false;
     if (ttsSupported()) {
       try {
         if (window.speechSynthesis.getVoices && !window.speechSynthesis.getVoices().length) { try { window.speechSynthesis.getVoices(); } catch (e) {} }
         window.speechSynthesis.cancel();
         var u = new SpeechSynthesisUtterance(text);
-        u.lang = lang; u.rate = rate;
-        try {
-          var vs = window.speechSynthesis.getVoices() || [];
-          var pref = (lang || 'en').split('-')[0].toLowerCase();
-          for (var vi = 0; vi < vs.length; vi++) { if (vs[vi] && vs[vi].lang && vs[vi].lang.toLowerCase().indexOf(pref) === 0) { u.voice = vs[vi]; break; } }
-        } catch (e) {}
+        u.lang = lang; u.rate = fr; u.pitch = fp;
+        applyVoice(u, lang);
         u.onend = function () { if (_spk.active === btn) _spkDone(); };
-        u.onerror = function () { if (_spk.active !== btn) return; _spk.active = null; _spk.text = ''; _spk.online = true; _spk.audio = onlineTTS(text, lang, rate); if (!_spk.audio) { _spkResetBtn(btn); _spkDone(); } };
+        u.onerror = function () { if (_spk.active !== btn) return; _spk.active = null; _spk.text = ''; _spk.online = true; _spk.audio = onlineTTS(text, lang, fr); if (!_spk.audio) { _spkResetBtn(btn); _spkDone(); } };
         window.speechSynthesis.speak(u);
         _spk.online = false;
         _spkSetBtn(btn, '⏸ 暂停朗读');
@@ -393,7 +422,7 @@ W.U = (function () {
     /* 在线兜底（无原生朗读的 WebView） */
     _spk.online = true;
     _spkSetBtn(btn, '⏸ 暂停朗读');
-    _spk.audio = onlineTTS(text, lang, rate);
+    _spk.audio = onlineTTS(text, lang, fr);
     if (!_spk.audio) { _spkResetBtn(btn); _spkDone(); }
   }
 
@@ -402,6 +431,6 @@ W.U = (function () {
     weekStart: weekStart, weekDays: weekDays, md: md, cnWeek: cnWeek, monthKey: monthKey, weekLabel: weekLabel,
     daysInMonth: daysInMonth, toast: toast, modal: modal, prompt: prompt1, confirm: confirm1, sheet: sheet,
     pickFile: pickFile, readImage: readImage, readAsDataURL: readAsDataURL, readFileText: readFileText, extractDocText: extractDocText, Blobs: Blobs,
-    speak: speak, speakToggle: speakToggle, stopSpeak: stopSpeak, ttsOK: ttsSupported, SR: SR, copy: copy, open: open2, debounce: debounce, fmtMin: fmtMin, onLongPress: onLongPress
+    speak: speak, speakToggle: speakToggle, stopSpeak: stopSpeak, ttsOK: ttsSupported, getVoices: getVoices, onVoicesReady: onVoicesReady, SR: SR, copy: copy, open: open2, debounce: debounce, fmtMin: fmtMin, onLongPress: onLongPress
   };
 })();
