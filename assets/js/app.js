@@ -142,12 +142,20 @@
     pitch.value = S0.tts.pitch != null ? S0.tts.pitch : 1.0;
     pitch.oninput = function () { lab3.textContent = '语调 ' + (+pitch.value).toFixed(2); };
     f3.appendChild(pitch); body.appendChild(f3);
+    var f4 = el('div', { class: 'fld', style: 'flex-direction:row;align-items:center;gap:8px' });
+    var cb = el('input', { type: 'checkbox', style: 'width:auto' });
+    cb.checked = !!S0.tts.zhYoudao;
+    f4.appendChild(cb);
+    f4.appendChild(el('label', { style: 'margin:0' }, '中文朗读优先用有道在线发音（更自然，需联网）'));
+    body.appendChild(f4);
+    body.appendChild(el('div', { class: 'small muted mb8' }, '开启后，中文示范朗读 / 中文释义改用有道在线发音（明显比系统机械音自然），逐句播放并带换气停顿；联网失败会自动回退系统音。英文朗读不受影响。'));
     box.appendChild(body);
     var ft = el('div', { class: 'modal-ft' });
     var cancel = el('button', { class: 'btn' }, '取消');
-    var test = el('button', { class: 'btn' }, '🔊 试听');
+    var test = el('button', { class: 'btn' }, '🔊 试听(英文)');
+    var testZh = el('button', { class: 'btn' }, '🔊 试听(中文)');
     var ok = el('button', { class: 'btn pri' }, '保存');
-    ft.appendChild(cancel); ft.appendChild(test); ft.appendChild(ok);
+    ft.appendChild(cancel); ft.appendChild(test); ft.appendChild(testZh); ft.appendChild(ok);
     box.appendChild(ft); mask.appendChild(box); U.$('#modalRoot').appendChild(mask);
     function fill() {
       var vs = U.getVoices();
@@ -162,11 +170,13 @@
     }
     fill(); U.onVoicesReady(fill);
     test.onclick = function () { U.speak('Hello, this is a natural pronunciation example.', 'en-US', +rate.value, +pitch.value, sel.value); };
+    testZh.onclick = function () { U.speak('今天天气真好，我们一起去公园散散步吧。', 'zh-CN', +rate.value, +pitch.value); };
     cancel.onclick = function () { mask.remove(); };
     ok.onclick = function () {
       S0.tts.voiceURI = sel.value || '';
       S0.tts.rate = +rate.value;
       S0.tts.pitch = +pitch.value;
+      S0.tts.zhYoudao = !!cb.checked;
       S.save(); mask.remove(); U.toast('朗读发音设置已保存');
     };
     mask.onclick = function (e) { if (e.target === mask) mask.remove(); };
