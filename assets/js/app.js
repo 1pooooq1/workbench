@@ -142,17 +142,6 @@
     pitch.value = S0.tts.pitch != null ? S0.tts.pitch : 1.0;
     pitch.oninput = function () { lab3.textContent = '语调 ' + (+pitch.value).toFixed(2); };
     f3.appendChild(pitch); body.appendChild(f3);
-    var f4 = el('div', { class: 'fld' });
-    f4.appendChild(el('label', null, '练嘴示范朗读语言'));
-    var langSel = el('select', { class: 'inp' });
-    [['zh-CN', '普通话（默认）'], ['zh-HK', '粤语（Cantonese）'], ['en-US', '英语']].forEach(function (o) {
-      var op = el('option', { value: o[0] }, o[1]);
-      if ((S0.tts.readLang || 'zh-CN') === o[0]) op.selected = true;
-      langSel.appendChild(op);
-    });
-    f4.appendChild(langSel);
-    body.appendChild(f4);
-    body.appendChild(el('div', { class: 'small muted mb8' }, '选「粤语」需设备装有粤语发音人（iOS 香港区域、安卓装 Google TTS「粵語」包、Windows 装粤语神经语音）；否则会回退到普通话。'));
     box.appendChild(body);
     var ft = el('div', { class: 'modal-ft' });
     var cancel = el('button', { class: 'btn' }, '取消');
@@ -178,7 +167,6 @@
       S0.tts.voiceURI = sel.value || '';
       S0.tts.rate = +rate.value;
       S0.tts.pitch = +pitch.value;
-      S0.tts.readLang = langSel.value || 'zh-CN';
       S.save(); mask.remove(); U.toast('朗读发音设置已保存');
     };
     mask.onclick = function (e) { if (e.target === mask) mask.remove(); };

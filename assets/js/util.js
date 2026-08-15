@@ -428,9 +428,9 @@ W.U = (function () {
     var chunk = q[_spk.qi];
     var u = new SpeechSynthesisUtterance(chunk);
     u.lang = lang;
-    /* 逐句轻微语速/语调变化，模拟自然停顿与重音，显著降低机械感 */
-    var r = fr * (0.96 + Math.random() * 0.08);
-    var p = fp * (0.97 + Math.random() * 0.06);
+    /* 逐句语速/语调抖动 + 标点感知停顿，模拟自然重音与呼吸感，显著降低机械感 */
+    var r = fr * (0.92 + Math.random() * 0.14);
+    var p = fp * (0.94 + Math.random() * 0.12);
     u.rate = Math.min(1.6, Math.max(0.5, r));
     u.pitch = Math.min(1.8, Math.max(0.5, p));
     applyVoice(u, lang);
@@ -446,7 +446,11 @@ W.U = (function () {
       _spk.busy = false; _spk.qi++;
       if (_spk.qi >= q.length) { _spkDone(); return; }
       if (_spk.paused) return; /* 暂停间隙：等 resume 触发续读 */
-      setTimeout(function () { if (_spk.active === btn && !_spk.paused && ttsSupported()) speakNext(btn, lang, fr, fp); }, 130);
+      /* 句末停顿随标点变化：句号/感叹/问号后停顿更长，逗号/分号后更短，贴近真人换气节奏 */
+      var last = (chunk || '').slice(-1);
+      var base = /[。！？.!?]/.test(last) ? 320 : (/[；;，,]/.test(last) ? 170 : 130);
+      var gap = base + Math.round(Math.random() * 140);
+      setTimeout(function () { if (_spk.active === btn && !_spk.paused && ttsSupported()) speakNext(btn, lang, fr, fp); }, gap);
     };
     u.onerror = function () {
       clearTimeout(wd);
