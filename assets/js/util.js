@@ -280,9 +280,13 @@ W.U = (function () {
   function pickVoice(lang) {
     var vs = _voices.length ? _voices : (ttsSupported() ? (window.speechSynthesis.getVoices() || []) : []);
     if (!vs.length) return null;
-    var pref = (lang || 'en').split('-')[0].toLowerCase();
+    lang = (lang || 'en-US').toLowerCase();
+    var pref = lang.split('-')[0];
     var match = vs.filter(function (v) { return v.lang && v.lang.toLowerCase().indexOf(pref) === 0; });
     if (!match.length) return null;
+    /* 优先精确匹配整段语言标签（如 zh-HK 配粤语、zh-CN 配普通话），避免粤语选到普通话嗓音 */
+    var exact = match.filter(function (v) { return v.lang && v.lang.toLowerCase() === lang; });
+    if (exact.length) match = exact;
     var rank = function (n) {
       n = (n || '').toLowerCase();
       if (/neural|enhanced|natural|premium|online|neural tts/.test(n)) return 4;

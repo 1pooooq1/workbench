@@ -317,7 +317,7 @@
         card.appendChild(el('div', { class: 'ex-art-body' }, esc(a.text)));
         var ops = el('div', { class: 'ex-art-ops' });
         ops.appendChild(C.btn('🎙️ 跟读录音', 'sm', function () { articlePractice(a); }));
-        ops.appendChild(C.btn('🔊 示范朗读', 'sm', function (e) { U.speakToggle(a.text, 'zh-CN', 0.92, e.currentTarget); }));
+        ops.appendChild(C.btn('🔊 示范朗读', 'sm', function (e) { U.speakToggle(a.text, (S.get().tts && S.get().tts.readLang) || 'zh-CN', 0.92, e.currentTarget); }));
         ops.appendChild(C.btn('✅ 完成', 'sm ok', function () {
           if (!s.express.articleDone[today]) s.express.articleDone[today] = [];
           if (s.express.articleDone[today].indexOf(a.id) < 0) s.express.articleDone[today].push(a.id);
@@ -346,7 +346,7 @@
 
         var ops = el('div', { class: 'ex-art-ops' });
         ops.appendChild(C.btn('🎙️ 跟读录音', 'sm', function () { articlePractice(a); }));
-        ops.appendChild(C.btn('🔊 示范朗读', 'sm', function (e) { U.speakToggle(a.text, 'zh-CN', 0.92, e.currentTarget); }));
+        ops.appendChild(C.btn('🔊 示范朗读', 'sm', function (e) { U.speakToggle(a.text, (S.get().tts && S.get().tts.readLang) || 'zh-CN', 0.92, e.currentTarget); }));
         ops.appendChild(C.btn('📋 复制', 'sm', function () { U.copy(a.text); U.toast('已复制'); }));
         ops.appendChild(C.btn('✏️ 编辑', 'sm', function () { articleEditor(a); }));
         if (!isDone) {
