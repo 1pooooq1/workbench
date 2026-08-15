@@ -102,7 +102,7 @@
       ops.appendChild(C.btn('📥 欧路同步', 'sm', function () { syncEudic(date, draw); }));
       ops.appendChild(C.btn('✍️ 单个录入', 'sm', function () { addOne(date, draw); }));
       ops.appendChild(C.btn('📋 批量粘贴', 'sm', function () { addBatch(date, draw); }));
-      ops.appendChild(C.btn('📂 从文件导入', 'sm', function () { addFile(date, draw); }));
+      ops.appendChild(C.btn('📄 从文档导入', 'sm', function () { addFile(date, draw); }));
       ops.appendChild(C.btn(hideSpell ? '👁 显示拼写' : '🙈 隐藏拼写', 'sm', function () { hideSpell = !hideSpell; draw(); }));
       ops.appendChild(C.btn(hideMean ? '👁 显示释义' : '🙈 隐藏释义', 'sm', function () { hideMean = !hideMean; draw(); }));
       ops.appendChild(C.btn('🎲 随机抽取', 'sm', function () { randomWordQuiz(L); }));

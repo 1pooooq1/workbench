@@ -246,7 +246,7 @@
           U.modal({ title: '导入单词（文档识别）', fields: [{ key: 'src', label: '粘贴文本：每行一个单词，或「单词  释义」用空格分开', ph: 'apple 苹果\nbook 书', type: 'textarea' }], okText: '加入词框' })
             .then(function (r) { if (r && r.src) addWordsFromText(g, r.src); });
         }));
-        ops.appendChild(btn('📂 选文件', 'sm', function () { pickFile(g); }));
+        ops.appendChild(btn('📄 选文档', 'sm', function () { pickFile(g); }));
         ops.appendChild(btn('🗑 删单词', 'sm dan', function () { deleteWords(g, view); }));
         ops.appendChild(btn('✏ 改名', 'sm', function () { U.modal({ title: '改名', fields: [{ key: 'n', label: '名称', value: g.name }], okText: '保存' }).then(function (r) { if (r && r.n) { g.name = r.n; S.save(); render(view); } }); }));
         ops.appendChild(btn('🗑 删除词框', 'sm dan', function () { U.confirm('删除词框「' + g.name + '」及其单词？').then(function (ok) { if (ok) { s.wordDocs = s.wordDocs.filter(function (x) { return x.id !== g.id; }); S.save(); render(view); } }); }));
@@ -656,7 +656,7 @@
     } catch (e) { U.toast('导出失败：' + (e && e.message || '')); }
   }
   function importWords() {
-    if (!U.pickFile) { U.toast('当前环境不支持选择文件'); return; }
+    if (!U.pickFile) { U.toast('当前环境不支持选择文档'); return; }
     U.pickFile('application/json').then(function (f) {
       if (!f) return;
       var fr = new FileReader();
@@ -685,7 +685,7 @@
         } catch (e) { U.toast('备份文件格式不正确'); }
       };
       fr.readAsText(f);
-    }).catch(function () { U.toast('选择文件失败'); });
+    }).catch(function () { U.toast('选择文档失败'); });
   }
   /* ---- 一键导入内置考研词书 ---- */
   function importKY() {
