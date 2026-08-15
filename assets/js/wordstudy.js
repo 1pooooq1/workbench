@@ -260,13 +260,16 @@
     });
   }
   function pickFile(g) {
-    if (!U.pickFile) return;
-    U.pickFile('text/plain,.txt,.md,.csv').then(function (f) {
-      if (!f) return;
-      var fr = new FileReader();
-      fr.onload = function () { addWordsFromText(g, fr.result); };
-      fr.readAsText(f);
-    }).catch(function () { U.toast('选择文件失败，可改用粘贴文本'); });
+    if (!U.pickFile) { U.toast('当前环境不支持选择文档'); return; }
+    U.pickFile('.pdf,.doc,.docx,.txt,.md,.csv,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/csv', true)
+      .then(function (f) {
+        if (!f) return;
+        // PDF / Word 需联网加载解析库；txt / md / csv 直接读取
+        U.extractDocText(f).then(function (text) {
+          addWordsFromText(g, text);
+        }).catch(function (e) { U.toast('解析文档失败：' + ((e && e.message) || e) + '（PDF / Word 需联网加载解析库）'); });
+      })
+      .catch(function () { U.toast('选择文档失败，可改用粘贴文本'); });
   }
 
   function openWordPicker(g, title, okText, onOk) {
