@@ -304,6 +304,14 @@ W.U = (function () {
   }
   function ttsRate(rate) { var s = (W.S && W.S.get()) || {}; var t = s.tts || {}; return (t.rate != null) ? +t.rate : (rate || 1); }
   function ttsPitch() { var s = (W.S && W.S.get()) || {}; var t = s.tts || {}; return (t.pitch != null) ? +t.pitch : 1; }
+  /* Chromium on Windows（Edge/Chrome）常见 bug：首次 speak 偶发静音、或 onend 不触发导致队列卡死。
+     预热引擎（先 speak 一句空文本）可规避首句静音；看门狗在 onend 不触发时自动续读。 */
+  var _primed = false;
+  function ensurePrimed() {
+    if (_primed || !ttsSupported()) return;
+    _primed = true;
+    try { var u = new SpeechSynthesisUtterance(''); u.volume = 0; window.speechSynthesis.speak(u); } catch (e) {}
+  }
   /* 在线 TTS 兜底：原生朗读不可用时，用网络发音服务自动适配
      优先级：有道词典发音（国内可直连，英/中均支持）→ Google 翻译发音（兜底）
      任一可达即用，全部失败才提示。 */
@@ -345,6 +353,7 @@ W.U = (function () {
           try { window.speechSynthesis.getVoices(); } catch (e) {}
         }
         window.speechSynthesis.cancel();
+        ensurePrimed(); /* 预热引擎，规避 Windows/Edge 首句静音 */
         var u = new SpeechSynthesisUtterance(text);
         u.lang = lang; u.rate = fr; u.pitch = fp;
         applyVoice(u, lang, voiceURI); /* 智能优选/手动指定自然发音人 */
@@ -422,7 +431,13 @@ W.U = (function () {
     u.pitch = Math.min(1.8, Math.max(0.5, p));
     applyVoice(u, lang);
     _spk.busy = true;
+    var wd = setTimeout(function () { /* 看门狗：onend 未触发（Windows/Edge 常见卡死）→ 自动续读 */
+      if (_spk.active !== btn || _spk.qi !== _spk.queue.indexOf(chunk)) return;
+      if (_spk.paused) return;
+      _spk.busy = false; _spk.qi++; speakNext(btn, lang, fr, fp);
+    }, 9000 + chunk.length * 70);
     u.onend = function () {
+      clearTimeout(wd);
       if (_spk.active !== btn) return;
       _spk.busy = false; _spk.qi++;
       if (_spk.qi >= q.length) { _spkDone(); return; }
@@ -430,6 +445,7 @@ W.U = (function () {
       setTimeout(function () { if (_spk.active === btn && !_spk.paused && ttsSupported()) speakNext(btn, lang, fr, fp); }, 130);
     };
     u.onerror = function () {
+      clearTimeout(wd);
       if (_spk.active !== btn) return;
       if (_spk.qi === 0) { /* 首句原生即失败 → 整体转在线兜底 */
         _spk.active = null; _spk.text = ''; _spk.busy = false; _spk.online = true;
@@ -452,6 +468,7 @@ W.U = (function () {
       try {
         if (window.speechSynthesis.getVoices && !window.speechSynthesis.getVoices().length) { try { window.speechSynthesis.getVoices(); } catch (e) {} }
         window.speechSynthesis.cancel();
+        ensurePrimed(); /* 预热引擎，规避 Windows/Edge 首句静音 */
         _spk.online = false;
         _spkSetBtn(btn, '⏸ 暂停朗读');
         speakNext(btn, lang, fr, fp);
