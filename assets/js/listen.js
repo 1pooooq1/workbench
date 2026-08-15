@@ -332,6 +332,15 @@
 
   function langOf(it) { return it.accent === '英音RP' ? 'en-GB' : 'en-US'; }
 
+  /* 播放：以本功能的「倍速」为准，临时覆盖全局朗读语速（不写回存储，避免改动用户的朗读发音设置） */
+  function playItem(it) {
+    var s0 = S.get(); if (!s0.tts) s0.tts = {};
+    var bak = ('rate' in s0.tts) ? s0.tts.rate : '**del**';
+    s0.tts.rate = +gSpeed;
+    try { U.speak(it.en, langOf(it), +gSpeed, 1.0); }
+    finally { if (bak === '**del**') delete s0.tts.rate; else s0.tts.rate = bak; }
+  }
+
   function injectStyle() {
     if (document.getElementById('kl-style')) return;
     var s = document.createElement('style');
@@ -380,7 +389,7 @@
   function buildCard(it) {
     var card = el('div', { class: 'card kl-card' + (statusOf(it.id) === 'done' ? ' kl-done' : '') });
     var top = el('div', { class: 'kl-top' });
-    var play = C.btn('▶ 播放', 'sm', function () { U.speak(it.en, langOf(it), +gSpeed, 1.0); });
+    var play = C.btn('▶ 播放', 'sm', function () { playItem(it); });
     var hz = C.btn('👁 译文', 'sm', function () { card.classList.toggle('kl-hz'); });
     var sel = (function () {
       var s = el('select', { class: 'kl-sel' });
