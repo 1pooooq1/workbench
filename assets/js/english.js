@@ -112,7 +112,11 @@
       if (W.WordStudy) {
         var wsHost = el('div', { style: 'margin-top:6px' });
         mount.appendChild(wsHost);
-        W.WordStudy.render(wsHost);
+        try { W.WordStudy.render(wsHost); }
+        catch (e) {
+          wsHost.appendChild(el('div', { class: 'card', style: 'padding:12px;color:#c0392b' }, '⚠️ 背单词模块渲染出错：' + ((e && e.message) || e) + '（上面的每日单词不受影响）'));
+          if (window.console) console.error(e);
+        }
       }
 
       /* 卡片 */

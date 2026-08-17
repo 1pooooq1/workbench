@@ -241,5 +241,19 @@
   }
 
   W.go = go; W.render = render; W.renderNav = renderNav;
+
+  /* 全局错误兜底：任何未被捕获的同步/异步错误都提示，而不是让页面静默变空白 */
+  window.addEventListener('error', function (e) {
+    var msg = (e && e.message) || '未知错误';
+    if (window.U && U.toast) U.toast('⚠️ 页面出错：' + msg + '（已尽量不中断，可刷新重试）');
+    if (window.console) console.error(e);
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e && e.reason;
+    var msg = (r && r.message) || r || '未知异步错误';
+    if (window.U && U.toast) U.toast('⚠️ 后台出错：' + msg);
+    if (window.console) console.error(e);
+  });
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();

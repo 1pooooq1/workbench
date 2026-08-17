@@ -45,6 +45,115 @@
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function empty(msg) { return el('div', { class: 'empty' }, '<span class="ei">📚</span>' + esc(msg)); }
+
+  /* ---------- 离线音标估算（无网络；供导入文档时给单词标注近似发音）---------- */
+  var PH_DICT = {
+    the:'ðə', a:'ə', an:'ən', is:'ɪz', are:'ɑːr', was:'wʌz', were:'wɜːr', to:'tə', of:'əv', and:'ənd',
+    or:'ɔːr', in:'ɪn', on:'ɑːn', at:'æt', by:'baɪ', for:'fɔːr', with:'wɪð', you:'juː', he:'hiː', she:'ʃiː',
+    we:'wiː', they:'ðeɪ', me:'miː', my:'maɪ', your:'jɔːr', this:'ðɪs', that:'ðæt', it:'ɪt', as:'əz',
+    be:'biː', been:'bɪn', have:'hæv', has:'hæz', had:'hæd', do:'duː', does:'dʌz', did:'dɪd', will:'wɪl',
+    would:'wʊd', can:'kæn', could:'kʊd', should:'ʃʊd', go:'ɡoʊ', goes:'ɡoʊz', went:'wɛnt', come:'kʌm',
+    came:'keɪm', get:'ɡɛt', got:'ɡɑːt', make:'meɪk', made:'meɪd', take:'teɪk', took:'tʊk', taken:'teɪkən',
+    see:'siː', saw:'sɔː', seen:'siːn', look:'lʊk', know:'noʊ', knew:'njuː', think:'θɪŋk', say:'seɪ',
+    said:'sɛd', tell:'tɛl', told:'toʊld', find:'faɪnd', found:'faʊnd', give:'ɡɪv', gave:'ɡeɪv',
+    work:'wɜːrk', play:'pleɪ', like:'laɪk', love:'lʌv', time:'taɪm', day:'deɪ', year:'jɪr', man:'mæn',
+    woman:'wʊmən', child:'tʃaɪld', people:'piːpəl', world:'wɜːrld', school:'skuːl', student:'stjuːdənt',
+    teacher:'tiːtʃər', english:'ɪŋɡlɪʃ', word:'wɜːrd', book:'bʊk', water:'wɔːtər', friend:'frɛnd',
+    house:'haʊs', food:'fuːd', good:'ɡʊd', new:'njuː', now:'naʊ', how:'haʊ', about:'əbaʊt'
+  };
+  function isVow(c) { return 'aeiouy'.indexOf(c) >= 0; }
+  function isCon(c) { return !isVow(c); }
+  function longV(c) { return ({ a: 'eɪ', e: 'iː', i: 'aɪ', o: 'oʊ', u: 'juː' })[c] || c; }
+  var OW_O = { slow: 1, snow: 1, show: 1, low: 1, blow: 1, grow: 1, flow: 1, know: 1, below: 1, throw: 1, window: 1, yellow: 1, row: 1, glow: 1, borrow: 1, tomorrow: 1, follow: 1, shadow: 1, narrow: 1, pillow: 1, arrow: 1 };
+  function estimatePh(raw) {
+    var w = String(raw || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (!w) return '';
+    if (PH_DICT[w]) return PH_DICT[w];
+    var i = 0, n = w.length, out = '';
+    function pk(k) { return w.substr(i, k); }
+    while (i < n) {
+      var c = w[i];
+      if (pk(3) === 'igh') { out += 'aɪ'; i += 3; continue; }
+      if (pk(3) === 'eigh') { out += 'eɪ'; i += 3; continue; }
+      if (pk(3) === 'augh') { out += 'ɔː'; i += 3; continue; }
+      if (pk(3) === 'ough') {
+        if (/^(though|although|dough|thorough)/.test(w)) out += 'oʊ';
+        else if (/^(thought|bought|brought|fought|sought)/.test(w)) out += 'ɔː';
+        else if (/^(enough|tough|rough)/.test(w)) out += 'ʌf';
+        else out += 'aʊ';
+        i += 3; continue;
+      }
+      if (pk(3) === 'ture') { out += 'tʃər'; i += 3; continue; }
+      if (pk(3) === 'sion') { out += 'ʒən'; i += 3; continue; }
+      if (pk(3) === 'tion') { out += 'ʃən'; i += 3; continue; }
+      if (pk(3) === 'dge') { out += 'dʒ'; i += 3; continue; }
+      if (pk(3) === 'tch') { out += 'tʃ'; i += 3; continue; }
+      if (pk(2) === 'gh') { i += 2; continue; }
+      if (pk(2) === 'ee') { out += 'iː'; i += 2; continue; }
+      if (pk(2) === 'ea') { out += (/^ea(d|th|lt|lv|lth)/.test(w.substr(i))) ? 'ɛ' : 'iː'; i += 2; continue; }
+      if (pk(2) === 'oo') { out += (/^(book|look|took|cook|good|foot|wood|wool|stood|hook|shook|crook|brook)/.test(w)) ? 'ʊ' : 'uː'; i += 2; continue; }
+      if (pk(2) === 'ou') {
+        if (/^(country|couple|cousin|double|touch|enough|young|trouble|rough|tough)/.test(w)) out += 'ʌ';
+        else if (/^(though|soul|shoulder|although|dough)/.test(w)) out += 'oʊ';
+        else if (/^(group|soup|you|through|wound|route)/.test(w)) out += 'uː';
+        else if (/^(thought|bought|brought|fought|ought)/.test(w)) out += 'ɔː';
+        else out += 'aʊ';
+        i += 2; continue;
+      }
+      if (pk(2) === 'ow') { out += (i + 2 === n && OW_O[w]) ? 'oʊ' : 'aʊ'; i += 2; continue; }
+      if (pk(2) === 'ai') { out += 'eɪ'; i += 2; continue; }
+      if (pk(2) === 'ay') { out += 'eɪ'; i += 2; continue; }
+      if (pk(2) === 'oa') { out += 'oʊ'; i += 2; continue; }
+      if (pk(2) === 'ei') { out += (/^(vein|weigh|eight|neighbour|weight|freight|rein|reign)/.test(w)) ? 'eɪ' : (/^(receive|ceiling|seize|protein|deceive)/.test(w) ? 'iː' : 'aɪ'); i += 2; continue; }
+      if (pk(2) === 'ie') { out += (/^(field|piece|chief|thief|belief|achieve|brief|relieve|grief|shield|nieces?)/.test(w)) ? 'iː' : 'aɪ'; i += 2; continue; }
+      if (pk(2) === 'ui') { out += (/^(fruit|juice|suit|suite|bruise|recruit)/.test(w)) ? 'uː' : (/^(build|guitar|guide|guilt)/.test(w) ? 'ɪ' : 'uː'); i += 2; continue; }
+      if (pk(2) === 'au') { out += 'ɔː'; i += 2; continue; }
+      if (pk(2) === 'aw') { out += 'ɔː'; i += 2; continue; }
+      if (pk(2) === 'oy' || pk(2) === 'oi') { out += 'ɔɪ'; i += 2; continue; }
+      if (pk(2) === 'ch') { out += 'tʃ'; i += 2; continue; }
+      if (pk(2) === 'sh') { out += 'ʃ'; i += 2; continue; }
+      if (pk(2) === 'th') { out += 'θ'; i += 2; continue; }
+      if (pk(2) === 'ph') { out += 'f'; i += 2; continue; }
+      if (pk(2) === 'wh') { out += 'w'; i += 2; continue; }
+      if (pk(2) === 'qu') { out += 'kw'; i += 2; continue; }
+      if (pk(2) === 'ck') { out += 'k'; i += 2; continue; }
+      if (pk(2) === 'ng') { out += 'ŋ'; i += 2; continue; }
+      if (pk(2) === 'wr') { out += 'r'; i += 2; continue; }
+      if (pk(2) === 'kn') { out += 'n'; i += 2; continue; }
+      if (pk(2) === 'sc') { out += (w[i + 2] === 'e' || w[i + 2] === 'i' || w[i + 2] === 'y') ? 's' : 'sk'; i += 2; continue; }
+      if (i + 2 < n && w[i + 2] === 'e' && isVow(c) && isCon(w[i + 1]) && i + 3 === n) { out += longV(c); i += 3; continue; }
+      if (c === 'c') { out += (w[i + 1] === 'e' || w[i + 1] === 'i' || w[i + 1] === 'y') ? 's' : 'k'; i++; continue; }
+      if (c === 'g') { out += (w[i + 1] === 'e' || w[i + 1] === 'i' || w[i + 1] === 'y') ? 'dʒ' : 'ɡ'; i++; continue; }
+      if (c === 'x') { out += 'ks'; i++; continue; }
+      if (c === 'y') { out += (i === 0) ? 'j' : (i + 1 === n ? 'aɪ' : 'ɪ'); i++; continue; }
+      if (c === 'b' && w[i + 1] === 't') { i++; continue; }
+      if (c === 'b' && w[i + 1] === 'm' && i + 2 === n) { out += 'm'; i += 2; continue; }
+      if (c === 'g' && w[i + 1] === 'n' && i + 2 === n) { i += 2; continue; }
+      if (c === 'h' && /^(hour|honest|honor|heir)/.test(w.substr(i))) { i++; continue; }
+      if (c === 'a') {
+        if (w[i + 1] === 'r') { out += 'ɑːr'; i += 2; continue; }
+        if (w[i + 1] === 'l' && i + 2 < n) { out += 'ɔː'; i += 2; continue; }
+        out += 'æ'; i++; continue;
+      }
+      if (c === 'e') { out += 'ɛ'; i++; continue; }
+      if (c === 'i') {
+        if (w[i + 1] === 'g' && w[i + 2] === 'n') { out += 'aɪ'; i += 3; continue; }
+        out += 'ɪ'; i++; continue;
+      }
+      if (c === 'o') {
+        if (w[i + 1] === 'r') { out += 'ɔːr'; i += 2; continue; }
+        if (w[i + 1] === 'm' || w[i + 1] === 'n' || w[i + 1] === 'v') { out += 'ʌ'; i++; continue; }
+        out += 'ɑː'; i++; continue;
+      }
+      if (c === 'u') {
+        if (w[i + 1] === 'r') { out += 'ɜːr'; i += 2; continue; }
+        out += 'ʌ'; i++; continue;
+      }
+      out += (c === 'j') ? 'dʒ' : c;
+      i++;
+    }
+    return '≈' + out; // 估算音标，可能与标准有出入；以 🔊 朗读为准
+  }
   function sep(t) { return el('div', { class: 'sep', style: 'margin:14px 0 10px;font-weight:700;color:#888' }, t); }
   function stat(label, val) {
     var c = el('div', { style: 'text-align:center;min-width:56px' });
@@ -93,6 +202,9 @@
       var rest = sp < 0 ? '' : line.slice(sp + 1).trim();
       var word = wordRaw.toLowerCase().replace(/[^a-z'-]/g, '');
       if (!word || word.length < 2) return;
+      // 提取音标：/.../ 或 [...] 或 (...)，如 "abandon /əˈbændən/ v. 放弃"
+      var ph = '', phm = rest.match(/\/([^\/]+)\/|\[([^\]]+)\]|\(([^)]+)\)/);
+      if (phm) { ph = phm[1] || phm[2] || phm[3]; rest = (rest.slice(0, phm.index) + ' ' + rest.slice(phm.index + phm[0].length)).trim(); }
       var mean = rest, ex = '';
       // 例句分隔：制表符 / 竖线 / 「例：」 / 「eg:」
       var exParts = rest.split(/\t+|\s*\|\s*/).filter(function (x) { return x.trim(); });
@@ -101,17 +213,22 @@
         var mm = rest.split(/例\s*[:：]|eg\.?/i);
         if (mm.length >= 2) { mean = mm[0].trim(); ex = mm.slice(1).join('').trim(); }
       }
-      out.push({ word: word, ph: '', mean: mean, ex: ex });
+      out.push({ word: word, ph: ph, mean: mean, ex: ex });
     });
     return out;
   }
   function addWordsFromText(group, text) {
     var ws = parseWords(text);
     var have = {}; (group.words || []).forEach(function (w) { have[w.word] = 1; });
-    var added = 0;
-    ws.forEach(function (w) { if (!have[w.word]) { group.words.push(w); have[w.word] = 1; added++; } });
+    var added = 0, fromDoc = 0;
+    ws.forEach(function (w) {
+      if (!have[w.word]) {
+        if (w.ph) fromDoc++; else w.ph = estimatePh(w.word); // 文档自带音标优先；否则离线估算（≈）
+        group.words.push(w); have[w.word] = 1; added++;
+      }
+    });
     S.save();
-    U.toast('已识别并加入 ' + added + ' 个新单词（该词框共 ' + group.words.length + '）');
+    U.toast('已识别 ' + added + ' 个新单词' + (fromDoc ? '（其中 ' + fromDoc + ' 个含文档内音标）' : '') + '；无音标的已用算法估算（≈ 开头），可用 🔊 听正确发音');
   }
 
   /* ---------- 艾宾浩斯调度 ---------- */
@@ -186,11 +303,18 @@
     var bar = el('div', { class: 'row mb8', style: 'flex-wrap:wrap;gap:6px' });
     tabs.forEach(function (t) { bar.appendChild(btn(t[1], curTab === t[0] ? 'pri sm' : 'sm', function () { curTab = t[0]; render(view); })); });
     view.appendChild(bar);
-    if (curTab === 'docs') renderDocs(view);
-    else if (curTab === 'study') renderStudy(view);
-    else if (curTab === 'review') renderReview(view);
-    else if (curTab === 'wrong') renderWrong(view);
-    else if (curTab === 'fam') renderFam(view);
+    function safeTab(name, fn) {
+      try { fn(view); }
+      catch (e) {
+        view.appendChild(el('div', { class: 'card', style: 'padding:12px;color:#c0392b' }, '⚠️「' + name + '」渲染出错：' + ((e && e.message) || e) + '（其他功能不受影响）'));
+        if (window.console) console.error(e);
+      }
+    }
+    if (curTab === 'docs') safeTab('词框分组', renderDocs);
+    else if (curTab === 'study') safeTab('今日背诵', renderStudy);
+    else if (curTab === 'review') safeTab('复习', renderReview);
+    else if (curTab === 'wrong') safeTab('错题本', renderWrong);
+    else if (curTab === 'fam') safeTab('熟词库', renderFam);
   }
 
   /* ---- 词库 / 分组 ---- */
@@ -215,6 +339,7 @@
       U.modal({ title: '新建词框', fields: [{ key: 'name', label: '词框名称', ph: '如 考研核心词' }, { key: 'cat', label: '分类（可选）', ph: '考研单词 / 专业术语…' }], okText: '创建' })
         .then(function (r) { if (r && r.name) { s.wordGroups.push({ id: U.uid(), name: r.name, cat: r.cat || '', words: [] }); S.save(); render(view); } });
     }));
+    add.appendChild(btn('📄 选文档建词框', 'pri sm', function () { importDocAsBox(view); }));
     add.appendChild(btn('📋 预设分组', 'sm', function () {
       ['四六级', '考研单词', '日常生词', '专业术语'].forEach(function (c) {
         if (!s.wordGroups.some(function (g) { return g.cat === c; })) s.wordGroups.push({ id: U.uid(), name: c, cat: c, words: [] });
@@ -267,6 +392,33 @@
       })
       .catch(function () { U.toast('选择文档失败，可改用粘贴文本'); });
   }
+  /* 直接选一份 PDF / Word / txt / md / csv 文档 → 新建一个词框并识别单词 + 发音 */
+  function importDocAsBox(view) {
+    if (!U.pickFile) { U.toast('当前环境不支持选择文档'); return; }
+    U.pickFile('.pdf,.doc,.docx,.txt,.md,.csv,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/csv', true)
+      .then(function (files) {
+        if (!files || !files.length) return;
+        var names = files.map(function (f) { return (f.name || '文档').replace(/\.[^.]+$/, ''); });
+        U.modal({ title: '新建词框（来自文档）', fields: [
+          { key: 'name', label: '词框名称', value: (names.length === 1 ? names[0] : '文档导入' + names.length + '份').slice(0, 30) },
+          { key: 'cat', label: '分类（可选）', value: '文档导入' }
+        ], okText: '导入' }).then(function (r) {
+          if (!r || !r.name) return;
+          var s = S.get();
+          var g = { id: U.uid(), name: r.name, cat: r.cat || '文档导入', words: [] };
+          s.wordGroups.push(g); S.save();
+          render(view);
+          var pending = files.length;
+          files.forEach(function (f) {
+            U.extractDocText(f)
+              .then(function (text) { addWordsFromText(g, text); })
+              .catch(function (e) { U.toast('解析「' + (f.name || '') + '」失败：' + ((e && e.message) || e) + '（PDF / Word 需联网加载解析库）'); })
+              .then(function () { if (--pending === 0) render(view); });
+          });
+        });
+      })
+      .catch(function () { U.toast('选择文档失败'); });
+  }
 
   function openWordPicker(g, title, okText, onOk) {
     var sel = {};
@@ -288,7 +440,7 @@
         var cb = el('input', { type: 'checkbox' }); sel[w.word] = false;
         cb.onchange = function () { sel[w.word] = cb.checked; };
         row.appendChild(cb);
-        row.appendChild(el('span', {}, esc(w.word) + (w.mean ? '  · ' + esc(w.mean) : '') + (w.ex ? '  「' + esc(w.ex) + '」' : '')));
+        row.appendChild(el('span', {}, esc(w.word) + (w.ph ? '  /' + esc(w.ph) + '/' : '') + (w.mean ? '  · ' + esc(w.mean) : '') + (w.ex ? '  「' + esc(w.ex) + '」' : '')));
         host.appendChild(row);
       });
       ac.onchange = function () {
