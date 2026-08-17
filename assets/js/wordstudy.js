@@ -6,7 +6,7 @@
  *   4) 背诵模式：浏览 / 拼写自测 / 释义回忆 / 听音拼写（听音→拼写，仿英语听音拼写）
  *   5) 艾宾浩斯：新词 当天/第2/4/7/15 天循环；答错增加频次；熟记归档进熟词库；错题本收纳顽固词
  *   6) 每日目标 + 打卡（同步到每日任务「背单词」）
- * 数据：state.wordDocs / wordPlan / eb / familiar / wrong / wordGoal / wordMode / wordAccent
+ * 数据：state.wordGroups / wordPlan / eb / familiar / wrong / wordGoal / wordMode / wordAccent
  */
 (function () {
   var W = window.W, S = W.S, U = W.U;
@@ -55,7 +55,14 @@
   function countDue() { var s = S.get(); var n = 0; for (var k in (s.eb || {})) { if (s.eb[k].next && s.eb[k].next <= dayOffset(0)) n++; } return n; }
   function init() {
     var s = S.get();
-    if (!s.wordDocs) s.wordDocs = [];
+    // 迁移：旧版把「词框分组」存在 wordDocs，现改名 wordGroups 以避让英语的文档库 wordDocs
+    var _raw = S.get();
+    if (!_raw.wordGroups && _raw['wordDocs']) {
+      var _grp = (_raw['wordDocs'] || []).filter(function (g) { return g && !('type' in g) && Array.isArray(g.words); });
+      var _doc = (_raw['wordDocs'] || []).filter(function (g) { return g && ('type' in g); });
+      if (_grp.length) { _raw.wordGroups = _grp; _raw['wordDocs'] = _doc; S.save(); }
+    }
+    if (!_raw.wordGroups) _raw.wordGroups = [];
     if (!s.wordPlan) s.wordPlan = {};
     if (!s.eb) s.eb = {};
     if (!s.familiar) s.familiar = [];
@@ -133,7 +140,7 @@
       var wb = (s.wordBook || []).filter(function (x) { return String(x.word || '').toLowerCase() === word.toLowerCase(); })[0];
       if (wb) return { word: String(wb.word || '').toLowerCase(), ph: wb.ph || '', mean: wb.mean || '', ex: wb.ex || '' };
     }
-    var g = (s.wordDocs || []).filter(function (x) { return x.id === gid; })[0];
+    var g = (s.wordGroups || []).filter(function (x) { return x.id === gid; })[0];
     if (g) { var w = (g.words || []).filter(function (x) { return x.word === word; })[0]; if (w) return w; }
     var f = (s.familiar || []).concat(s.wrong || []).filter(function (x) { return x.key === key; })[0];
     return f || { word: word };
@@ -153,26 +160,15 @@
     U.toast('🎉 已完成今日背诵目标，已打卡到「每日任务 · 背单词」');
   }
 
-  /* ---------- 导航注册 ---------- */
-  function ensureNav() {
-    try {
-      var s = S.get(); if (!s.nav) return;
-      if (!s.nav.some(function (n) { return n.id === 'wordstudy'; })) {
-        s.nav.push({ id: 'wordstudy', name: '背单词', icon: '📚', visible: true, lock: false, order: s.nav.length });
-        S.save(); if (W.renderNav) W.renderNav();
-      }
-    } catch (e) {}
-  }
-
   /* ============ 页面渲染 ============ */
   function render(view) {
     VIEW = view;
     view.innerHTML = '';
-    init(); ensureNav();
+    init();
     var s = S.get();
     var done = (s.wordDone && s.wordDone[today()]) || 0;
     var head = el('div', { class: 'card', style: 'padding:12px;margin-bottom:10px' });
-    head.appendChild(el('div', { style: 'font-size:15px;font-weight:700;margin-bottom:8px' }, '📚 背单词'));
+    head.appendChild(el('div', { style: 'font-size:15px;font-weight:700;margin-bottom:8px' }, '📚 词框分组与复习计划（从独立背单词合并）'));
     var ov = el('div', { class: 'row', style: 'gap:14px;flex-wrap:wrap' });
     ov.appendChild(stat('每日目标', s.wordGoal || 30));
     ov.appendChild(stat('已完成', done));
@@ -186,7 +182,7 @@
     bk.appendChild(btn('📥 恢复', 'sm', function () { importWords(); }));
     bk.appendChild(el('span', { class: 'small muted', style: 'margin-left:auto' }, '仅备份背单词数据'));
     view.appendChild(bk);
-    var tabs = [['docs', '词库'], ['study', '今日背诵'], ['review', '复习'], ['wrong', '错题本'], ['fam', '熟词库']];
+    var tabs = [['docs', '词框分组'], ['study', '今日背诵'], ['review', '复习'], ['wrong', '错题本'], ['fam', '熟词库']];
     var bar = el('div', { class: 'row mb8', style: 'flex-wrap:wrap;gap:6px' });
     tabs.forEach(function (t) { bar.appendChild(btn(t[1], curTab === t[0] ? 'pri sm' : 'sm', function () { curTab = t[0]; render(view); })); });
     view.appendChild(bar);
@@ -217,11 +213,11 @@
     var add = el('div', { class: 'row mb8', style: 'gap:8px;flex-wrap:wrap' });
     add.appendChild(btn('➕ 新建词框', 'pri sm', function () {
       U.modal({ title: '新建词框', fields: [{ key: 'name', label: '词框名称', ph: '如 考研核心词' }, { key: 'cat', label: '分类（可选）', ph: '考研单词 / 专业术语…' }], okText: '创建' })
-        .then(function (r) { if (r && r.name) { s.wordDocs.push({ id: U.uid(), name: r.name, cat: r.cat || '', words: [] }); S.save(); render(view); } });
+        .then(function (r) { if (r && r.name) { s.wordGroups.push({ id: U.uid(), name: r.name, cat: r.cat || '', words: [] }); S.save(); render(view); } });
     }));
     add.appendChild(btn('📋 预设分组', 'sm', function () {
       ['四六级', '考研单词', '日常生词', '专业术语'].forEach(function (c) {
-        if (!s.wordDocs.some(function (g) { return g.cat === c; })) s.wordDocs.push({ id: U.uid(), name: c, cat: c, words: [] });
+        if (!s.wordGroups.some(function (g) { return g.cat === c; })) s.wordGroups.push({ id: U.uid(), name: c, cat: c, words: [] });
       });
       S.save(); U.toast('已创建预设分组'); render(view);
     }));
@@ -230,7 +226,7 @@
     view.appendChild(add);
     view.appendChild(sep('———— 我的词框 ————'));
 
-    var groups = [liveWordBookGroup()].concat(s.wordDocs);
+    var groups = [liveWordBookGroup()].concat(s.wordGroups);
     if (!groups.length) { view.appendChild(empty('还没有词框。先「新建词框」或「预设分组」，再导入文档识别单词。')); return; }
 
     groups.forEach(function (g) {
@@ -249,7 +245,7 @@
         ops.appendChild(btn('📄 选文档', 'sm', function () { pickFile(g); }));
         ops.appendChild(btn('🗑 删单词', 'sm dan', function () { deleteWords(g, view); }));
         ops.appendChild(btn('✏ 改名', 'sm', function () { U.modal({ title: '改名', fields: [{ key: 'n', label: '名称', value: g.name }], okText: '保存' }).then(function (r) { if (r && r.n) { g.name = r.n; S.save(); render(view); } }); }));
-        ops.appendChild(btn('🗑 删除词框', 'sm dan', function () { U.confirm('删除词框「' + g.name + '」及其单词？').then(function (ok) { if (ok) { s.wordDocs = s.wordDocs.filter(function (x) { return x.id !== g.id; }); S.save(); render(view); } }); }));
+        ops.appendChild(btn('🗑 删除词框', 'sm dan', function () { U.confirm('删除词框「' + g.name + '」及其单词？').then(function (ok) { if (ok) { s.wordGroups = s.wordGroups.filter(function (x) { return x.id !== g.id; }); S.save(); render(view); } }); }));
       } else {
         ops.appendChild(btn('🔄 同步', 'sm', function () { render(view); U.toast('已与英语生词本同步'); }));
         ops.appendChild(btn('🔁 顺序续背', 'sm', function () { seqPick(g, view); }));
@@ -644,7 +640,7 @@
     var s = S.get();
     var data = {
       v: 1, app: 'workbench-wordstudy',
-      wordDocs: s.wordDocs || [], wordPlan: s.wordPlan || {}, eb: s.eb || {},
+      wordGroups: s.wordGroups || [], wordPlan: s.wordPlan || {}, eb: s.eb || {},
       familiar: s.familiar || [], wrong: s.wrong || [],
       wordGoal: s.wordGoal, wordMode: s.wordMode, wordAccent: s.wordAccent,
       wordDone: s.wordDone || {}, wordShuffle: !!s.wordShuffle,
@@ -666,9 +662,9 @@
       fr.onload = function () {
         try {
           var o = JSON.parse(fr.result);
-          if (!o || !o.wordDocs) throw 0;
+          if (!o || !(o.wordGroups || o.wordDocs)) throw 0;
           var s = S.get();
-          s.wordDocs = o.wordDocs || [];
+          s.wordGroups = o.wordGroups || o.wordDocs || [];
           s.wordPlan = o.wordPlan || {};
           s.eb = o.eb || {};
           s.familiar = o.familiar || [];
@@ -695,8 +691,8 @@
     if (!(window.W && W.KY && W.KY.list)) { U.toast('内置考研词书未加载'); return; }
     var s = S.get();
     var name = '考研核心词（内置）';
-    var g = (s.wordDocs || []).filter(function (x) { return x.name === name; })[0];
-    if (!g) { g = { id: U.uid(), name: name, cat: '考研单词', words: [] }; s.wordDocs.push(g); }
+    var g = (s.wordGroups || []).filter(function (x) { return x.name === name; })[0];
+    if (!g) { g = { id: U.uid(), name: name, cat: '考研单词', words: [] }; s.wordGroups.push(g); }
     var have = {}; (g.words || []).forEach(function (w) { have[w.word] = 1; });
     var added = 0;
     W.KY.list.forEach(function (d) {
@@ -760,7 +756,7 @@
     card.appendChild(ctr);
     host.appendChild(card);
   }
+  /* 对外暴露：供「英语·背英语单词」整页嵌入（统一入口） */
+  W.WordStudy = { render: render, init: init };
   W.P.wordstudy = function (view) { render(view); };
-  if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', function () { setTimeout(ensureNav, 0); });
-  else setTimeout(ensureNav, 0);
 })();

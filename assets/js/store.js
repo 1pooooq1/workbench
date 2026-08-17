@@ -121,7 +121,6 @@
     { id: 'ai', name: 'AI技巧库', icon: '🤖', visible: true },
     { id: 'kaoyan', name: '考研', icon: '🎓', visible: true },
     { id: 'english', name: '英语', icon: '🔤', visible: true },
-    { id: 'wordstudy', name: '背单词', icon: '📚', visible: true },
     { id: 'kaoyan-listen', name: '考研精听', icon: '🎧', visible: true },
     { id: 'reading', name: '阅读', icon: '📖', visible: true },
     { id: 'art', name: '艺术', icon: '🎨', visible: true },
@@ -450,6 +449,8 @@
     // 导航补齐新模块
     var have = {}; state.nav.forEach(function (n) { have[n.id] = 1; });
     NAV.forEach(function (n, i) { if (!have[n.id]) state.nav.push({ id: n.id, name: n.name, icon: n.icon, visible: true, lock: !!n.lock, order: 100 + i }); });
+    // 移除已合并进「英语·背英语单词」的独立背单词入口（老用户本地 nav 同样清理）
+    state.nav = state.nav.filter(function (n) { return n.id !== 'wordstudy'; });
     /* 文档词库：首次/缺文档时灌入预置文档（如红宝书），且不可被用户误删 */
     if (!state.wordDocs) state.wordDocs = [];
     if (window.W && W.SEED_DOCS && W.SEED_DOCS.length) {

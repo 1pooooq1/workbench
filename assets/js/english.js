@@ -130,6 +130,13 @@
       /* 素材库 */
       mount.appendChild(C.subTitle('单词素材库（按日期/题材归档）'));
       mount.appendChild(C.tree('en_wordlib'));
+
+      /* 合并：原独立「背单词」模块（词框分组 / 今日背诵 / 艾宾浩斯复习 / 错题本 / 熟词库 / AI 配套短文 / 备份恢复）统一并入英语·背英语单词 */
+      if (W.WordStudy) {
+        var wsHost = el('div', { style: 'margin-top:14px;border-top:1px dashed #ddd;padding-top:10px' });
+        mount.appendChild(wsHost);
+        W.WordStudy.render(wsHost);
+      }
     }
     function wordCard(w, date, redraw, hideSpell, hideMean) {
       var spellOn = !(hideSpell || w.hideSpell);
