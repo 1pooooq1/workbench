@@ -108,8 +108,12 @@
       ops.appendChild(C.btn('🎲 随机抽取', 'sm', function () { randomWordQuiz(L); }));
       mount.appendChild(ops);
 
-      /* 文档词库（自定义添加 / 移除文档） */
-      mount.appendChild(docPanel());
+      /* 原「背单词」模块（词框分组 / 今日背诵 / 艾宾浩斯复习 / 错题本 / 熟词库 / AI 配套短文 / 备份恢复）—— 替代原「文档词库」位置 */
+      if (W.WordStudy) {
+        var wsHost = el('div', { style: 'margin-top:6px' });
+        mount.appendChild(wsHost);
+        W.WordStudy.render(wsHost);
+      }
 
       /* 卡片 */
       if (!L.length) mount.appendChild(el('div', { class: 'empty' }, '<span class="ei">🔤</span>今天还没有单词，点上方按钮添加'));
@@ -131,12 +135,7 @@
       mount.appendChild(C.subTitle('单词素材库（按日期/题材归档）'));
       mount.appendChild(C.tree('en_wordlib'));
 
-      /* 合并：原独立「背单词」模块（词框分组 / 今日背诵 / 艾宾浩斯复习 / 错题本 / 熟词库 / AI 配套短文 / 备份恢复）统一并入英语·背英语单词 */
-      if (W.WordStudy) {
-        var wsHost = el('div', { style: 'margin-top:14px;border-top:1px dashed #ddd;padding-top:10px' });
-        mount.appendChild(wsHost);
-        W.WordStudy.render(wsHost);
-      }
+      /* （原「背单词」模块已上移替代「文档词库」位置，此处不再重复嵌入） */
     }
     function wordCard(w, date, redraw, hideSpell, hideMean) {
       var spellOn = !(hideSpell || w.hideSpell);
@@ -274,173 +273,6 @@
         };
         fr.onerror = function () { U.toast('文件读取失败'); };
         fr.readAsText(file);
-      });
-    }
-    /* 文档词库：仿「词框分组与复习计划」的大卡片 + 统计 + 标签页 + 快捷按钮布局 */
-    function docStat(label, value, color) {
-      var d = el('div', { style: 'text-align:center;min-width:64px' });
-      d.appendChild(el('div', { style: 'font-size:18px;font-weight:700;color:' + (color || 'var(--tx1)') }, String(value)));
-      d.appendChild(el('div', { style: 'font-size:11px;color:var(--tx3);margin-top:2px' }, label));
-      return d;
-    }
-    function docSep(text) { return el('div', { style: 'text-align:center;color:var(--tx3);font-size:12px;margin:10px 0' }, text); }
-    function docPanel() {
-      var wrap = el('div');
-      var docs = s.wordDocs || [];
-      var todayWords = s.words[date] || [];
-      var totalWords = docs.reduce(function (a, d) { return a + (d.words || []).length; }, 0);
-      var importedToday = todayWords.filter(function (w) { return w.doc; }).length;
-      var masteredToday = todayWords.filter(function (w) { return w.mastered; }).length;
-
-      /* 标题 + 统计 */
-      var head = el('div', { class: 'card', style: 'padding:12px;margin-bottom:10px' });
-      head.appendChild(el('div', { style: 'font-size:15px;font-weight:700;margin-bottom:8px' }, '📚 文档词库（自定义添加 / 移除文档）'));
-      var ov = el('div', { class: 'row', style: 'gap:14px;flex-wrap:wrap' });
-      ov.appendChild(docStat('文档数', docs.length));
-      ov.appendChild(docStat('总词数', totalWords));
-      ov.appendChild(docStat('今日已导入', importedToday, '#2fbf87'));
-      ov.appendChild(docStat('已掌握', masteredToday, '#5b6cff'));
-      head.appendChild(ov);
-      wrap.appendChild(head);
-
-      /* 快捷操作 */
-      var ops = el('div', { class: 'row mb8', style: 'gap:8px;flex-wrap:wrap' });
-      ops.appendChild(C.btn('➕ 添加文档', 'pri sm', addDocFromFile));
-      ops.appendChild(C.btn('✚ 新建空白文档', 'sm', newDocManual));
-      ops.appendChild(C.btn('📋 批量粘贴', 'sm', batchCreateDoc));
-      ops.appendChild(C.btn('🗑 清空', 'sm dan', clearDocs));
-      wrap.appendChild(ops);
-
-      /* 标签页 */
-      var tabs = [['list', '文档列表'], ['today', '今日导入'], ['mastered', '已掌握']];
-      var curTab = W.__docTab || 'list';
-      var bar = el('div', { class: 'row mb8', style: 'flex-wrap:wrap;gap:6px' });
-      tabs.forEach(function (t) {
-        bar.appendChild(C.btn(t[1], curTab === t[0] ? 'pri sm' : 'sm', function () { W.__docTab = t[0]; draw(); }));
-      });
-      wrap.appendChild(bar);
-
-      /* 内容 */
-      if (curTab === 'list') {
-        if (!docs.length) { wrap.appendChild(el('div', { class: 'empty' }, '<span class="ei">📄</span>还没有文档，点「添加文档」导入 PDF / Word / txt')); return wrap; }
-        wrap.appendChild(docSep('———— 我的文档 ————'));
-        docs.forEach(function (d) { wrap.appendChild(docCard(d)); });
-      } else if (curTab === 'today') {
-        wrap.appendChild(docSep('———— 今日从文档导入 ————'));
-        var imported = todayWords.filter(function (w) { return w.doc; });
-        if (!imported.length) wrap.appendChild(el('div', { class: 'empty' }, '今天还没有从文档导入单词'));
-        else wrap.appendChild(wordMiniList(imported));
-      } else if (curTab === 'mastered') {
-        wrap.appendChild(docSep('———— 今日已掌握 ————'));
-        var mastered = todayWords.filter(function (w) { return w.mastered; });
-        if (!mastered.length) wrap.appendChild(el('div', { class: 'empty' }, '今天还没有掌握单词'));
-        else wrap.appendChild(wordMiniList(mastered));
-      }
-      return wrap;
-    }
-    function docCard(d) {
-      var card = el('div', { class: 'card', style: 'padding:10px;margin-bottom:8px' });
-      var h = el('div', { class: 'row', style: 'justify-content:space-between;align-items:center;margin-bottom:6px' });
-      h.appendChild(el('div', { style: 'font-weight:600' }, esc(d.name) + '  <span class="small muted">(' + (d.words || []).length + ' 词 · ' + (d.type || 'txt').toUpperCase() + ')</span>'));
-      card.appendChild(h);
-      var ops = el('div', { class: 'row', style: 'gap:6px;flex-wrap:wrap' });
-      ops.appendChild(C.btn('📥 导入今日', 'pri sm', function () {
-        var cnt = d.words ? d.words.length : 0;
-        if (cnt > 200 && !confirm('该文档有 ' + cnt + ' 个单词，确认全部加入「' + date + '」？')) return;
-        var n = S.importDocWords(d.id, date); U.toast('已导入 ' + n + ' 个单词到 ' + date); draw();
-      }));
-      ops.appendChild(C.btn('👁 查看', 'sm', function () { viewDocWords(d); }));
-      if (d.removable !== false) {
-        ops.appendChild(C.btn('✏ 加词', 'sm', function () { addWordsToDoc(d.id); }));
-        ops.appendChild(C.btn('🗑 移除', 'sm dan', function () {
-          U.confirm('移除文档「' + d.name + '」？其单词也会从当日清单移除（生词本保留）').then(function (y) { if (y) { S.removeDoc(d.id); U.toast('已移除文档'); draw(); } });
-        }));
-      }
-      card.appendChild(ops);
-      return card;
-    }
-    function batchCreateDoc() {
-      U.modal({
-        title: '批量粘贴新建文档',
-        html: '<div class="small muted mb8">输入文档名称，然后粘贴单词。支持「单词 释义」「单词|音标|释义」「单词\\t音标\\t释义」</div>',
-        fields: [{ key: 'name', label: '文档名称', ph: '如 考研核心词' }, { key: 't', label: '单词内容', type: 'textarea', rows: 8 }]
-      }).then(function (v) {
-        if (!v || !v.name || !v.t) return;
-        var words = parseWords(v.t);
-        if (!words.length) { U.toast('未识别到单词'); return; }
-        S.addDoc({ id: U.uid(), name: v.name, type: 'manual', removable: true, words: words });
-        U.toast('已新建文档：' + v.name + '（' + words.length + ' 词）'); draw();
-      });
-    }
-    function clearDocs() {
-      if (!s.wordDocs || !s.wordDocs.length) { U.toast('没有文档可清空'); return; }
-      U.confirm('清空所有文档？文档中的单词不会进入生词本，仅删除文档记录。').then(function (y) {
-        if (!y) return;
-        s.wordDocs = []; S.save(); U.toast('已清空文档词库'); draw();
-      });
-    }
-    function viewDocWords(d) {
-      U.modal({ title: d.name + '（' + (d.words || []).length + ' 词）', html: '<div id="docViewHost" style="max-height:60vh;overflow:auto"></div>', hideCancel: true, okText: '关闭' });
-      setTimeout(function () {
-        var host = document.getElementById('docViewHost'); if (!host) return;
-        host.innerHTML = '';
-        (d.words || []).forEach(function (w) {
-          host.appendChild(el('div', { style: 'padding:6px 0;border-bottom:1px solid var(--line)' }, '<b>' + esc(w.word) + '</b>' + (w.ph ? '  ' + esc(w.ph) : '') + (w.mean ? '  · ' + esc(w.mean) : '')));
-        });
-      }, 30);
-    }
-    function wordMiniList(words) {
-      var host = el('div');
-      words.forEach(function (w) {
-        var row = el('div', { class: 'card', style: 'padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center' });
-        var left = el('div');
-        left.appendChild(el('div', { style: 'font-weight:600' }, esc(w.word)));
-        if (w.ph || w.mean) left.appendChild(el('div', { class: 'small muted' }, esc((w.ph || '') + '  ' + (w.mean || ''))));
-        row.appendChild(left);
-        row.appendChild(C.btn('🔊', 'sm', function () { U.speak(w.word, 'en-US'); }));
-        host.appendChild(row);
-      });
-      return host;
-    }
-    function addDocFromFile() {
-      U.pickFile('.pdf,.doc,.docx,.txt,.csv,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/csv')
-        .then(function (file) {
-          if (!file) return;
-          var ext = (file.name.split('.').pop() || '').toLowerCase();
-          U.toast('正在解析「' + file.name + '」…');
-          var p;
-          if (ext === 'txt' || ext === 'csv') p = readFileText(file).then(parseDocText);
-          else if (ext === 'pdf') p = parsePdfFile(file);
-          else if (ext === 'docx') p = parseDocxFile(file);
-          else if (ext === 'doc') { U.toast('旧版 .doc 暂不支持，请另存为 .docx 或 .txt'); return; }
-          else { U.toast('不支持的格式：' + ext); return; }
-          p.then(function (words) {
-            if (!words || !words.length) { U.toast('未识别到单词，请确认文档是「单词 释义」格式'); return; }
-            S.addDoc({ id: U.uid(), name: file.name, type: ext, removable: true, words: words });
-            U.toast('已添加文档：' + file.name + '（' + words.length + ' 词）'); draw();
-          }).catch(function (e) { U.toast('解析失败：' + ((e && e.message) || e) + '（PDF / Word 需联网加载解析库）'); });
-        });
-    }
-    function newDocManual() {
-      U.prompt('新建文档', '文档名称').then(function (name) {
-        if (!name) return;
-        var doc = { id: U.uid(), name: name, type: 'manual', removable: true, words: [] };
-        S.addDoc(doc); draw(); addWordsToDoc(doc.id);
-      });
-    }
-    function addWordsToDoc(docId) {
-      U.modal({
-        title: '向文档添加单词', html: '<div class="small muted mb8">每行一个，支持「单词 释义」「单词|音标|释义」「单词\\t音标\\t释义」（CSV 逗号亦可）</div>',
-        fields: [{ key: 't', label: '粘贴内容', type: 'textarea', rows: 8 }]
-      }).then(function (v) {
-        if (!v) return;
-        var d = (s.wordDocs || []).filter(function (x) { return x.id === docId; })[0]; if (!d) return;
-        var add = parseWords(v.t), n = 0;
-        add.forEach(function (x) {
-          if (d.words.some(function (e) { return e.word === x.word; })) return;
-          d.words.push({ word: x.word, ph: x.ph, mean: x.mean }); n++;
-        });
-        S.save(); U.toast('文档新增 ' + n + ' 词'); draw();
       });
     }
     function randomWordQuiz(L) {
