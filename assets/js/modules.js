@@ -281,6 +281,7 @@
       sections: [
         { key: 'daily_quote', icon: '💬', title: '每日一句', sub: '对接欧路词典每日一句 / 内置词库', render: function (b) { b.appendChild(quoteCard()); b.appendChild(el('div', { class: 'small muted mt6' }, '提示：点「欧路」跳转官方每日一句页面，复制后可粘贴保存。')); b.appendChild(C.btn('✍️ 手动录入今日一句', 'sm mt6', function () { U.modal({ title: '录入每日一句', fields: [{ key: 'e', label: '英文' }, { key: 'z', label: '中文' }] }).then(function (x) { if (x) { s.quote = { date: U.today(), en: x.e, zh: x.z, from: '欧路词典' }; S.save(); W.render(); } }); })); } },
         { key: 'daily_mood', icon: '🌈', title: '感受', sub: '日历 + 天气温度 + 心情表情 + 当日记录', render: function (b) { moodPanel(b); } },
+        { key: 'daily_qa', icon: '📝', title: '每日十问', sub: '问自己几个问题 · 月历打点 · 点击日期回看问答', open: true, render: function (b) { if (W.DailyQ) { try { W.DailyQ.render(b); } catch (e) { b.appendChild(el('div', { class: 'card', style: 'padding:12px;color:var(--red)' }, '⚠️ 每日十问渲染出错：' + ((e && e.message) || e))); if (window.console) console.error(e); } } } },
         { key: 'daily_ck', icon: '✅', title: '打卡', sub: '横向周打卡日历，支持自定义增减任务', render: function (b) { b.appendChild(C.weekcheck('daily', { title: '每日习惯打卡' })); b.appendChild(C.subTitle('今日待办')); b.appendChild(C.tasklist('daily', { addText: '新增今日任务' })); } },
         { key: 'daily_calligraphy', icon: '✍️', title: '书法练习', sub: '教程视频 · 练字记录 · 月度对比 · 抖音爆款参考', render: function (b) { calligraphySection(b); } }
       ]
