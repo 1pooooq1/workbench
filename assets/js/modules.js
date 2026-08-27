@@ -210,7 +210,7 @@
       var d = U.today();
       if (!s.calligraphy.records[d]) s.calligraphy.records[d] = [];
       s.calligraphy.records[d].unshift({ id: U.uid(), img: photoId, desc: descTa.value.trim(), mood: moodSel.value, date: d, ts: Date.now() });
-      S.save(); descTa.value = ''; moodSel.value = ''; photoId = null; photoThumb.textContent = '未上传照片'; U.toast('已保存'); drawRecords();
+      S.save(); descTa.value = ''; moodSel.value = ''; photoId = null; photoThumb.textContent = '未上传照片'; U.toast('已保存'); drawRecords(); drawCal();
     });
     form.appendChild(up); form.appendChild(photoThumb); form.appendChild(descTa); form.appendChild(moodSel); form.appendChild(save);
     b.appendChild(form);
@@ -238,6 +238,70 @@
       });
     }
     drawRecords();
+
+    /* 练字月历：有记录的日子显示小圆点；点击日期看当天照片和想法 */
+    b.appendChild(C.subTitle('📅 练字月历'));
+    var calHost = el('div');
+    b.appendChild(calHost);
+    var selDate = null, calYM = U.today().slice(0, 7);
+    function drawCal() {
+      calHost.innerHTML = '';
+      var y0 = +calYM.split('-')[0], m0 = +calYM.split('-')[1];
+      var cal = el('div', { class: 'cal' });
+      var hd = el('div', { class: 'cal-hd' });
+      hd.appendChild(C.btn('‹', 'sm', function () { var y = y0, m = m0 - 1; if (m < 1) { y--; m = 12; } calYM = y + '-' + pad(m); selDate = null; drawCal(); }));
+      hd.appendChild(el('div', { style: 'font-weight:650;font-size:13px' }, calYM));
+      hd.appendChild(C.btn('›', 'sm', function () { var y = y0, m = m0 + 1; if (m > 12) { y++; m = 1; } calYM = y + '-' + pad(m); selDate = null; drawCal(); }));
+      cal.appendChild(hd);
+      var g = el('div', { class: 'cal-g' });
+      ['一', '二', '三', '四', '五', '六', '日'].forEach(function (w) { g.appendChild(el('div', { class: 'cal-w' }, w)); });
+      var first = new Date(y0, m0 - 1, 1), off = (first.getDay() + 6) % 7;
+      for (var i = 0; i < off; i++) g.appendChild(el('div', { class: 'cal-d out' }, ''));
+      var dim = U.daysInMonth(y0, m0);
+      for (var dd = 1; dd <= dim; dd++) {
+        (function (dd) {
+          var dk = y0 + '-' + pad(m0) + '-' + pad(dd);
+          var recs = s.calligraphy.records[dk] || [];
+          var c = el('div', { class: 'cal-d' + (dk === U.today() ? ' today' : '') + (dk === selDate ? ' sel' : '') });
+          c.appendChild(el('div', null, dd));
+          if (recs.length > 0) {
+            var dot = el('div', { class: 'dt' });
+            if (dk === selDate) dot.style.background = '#fff';
+            c.appendChild(dot);
+          }
+          c.onclick = function () { selDate = dk; drawCal(); };
+          g.appendChild(c);
+        })(dd);
+      }
+      cal.appendChild(g);
+      calHost.appendChild(cal);
+
+      var dc = el('div', { class: 'card mt6' });
+      dc.style.padding = '14px';
+      if (!selDate) {
+        dc.appendChild(el('div', { class: 'small muted', style: 'text-align:center;padding:10px 0' }, '点击上方日期，查看当天的练字照片和想法'));
+      } else {
+        var recs = s.calligraphy.records[selDate] || [];
+        dc.appendChild(el('div', { style: 'font-size:14px;font-weight:600;margin-bottom:10px' }, '📅 ' + selDate + (recs.length ? ' · ' + recs.length + ' 条记录' : '')));
+        if (recs.length === 0) {
+          dc.appendChild(el('div', { class: 'small muted', style: 'text-align:center;padding:8px 0' }, '这一天没有练字记录'));
+        } else {
+          recs.forEach(function (r) {
+            var item = el('div', { style: 'margin-bottom:14px' });
+            if (r.img) {
+              var img = el('img', { style: 'max-width:100%;border-radius:10px;margin-bottom:8px;display:block' });
+              U.Blobs.get(r.img).then(function (d) { if (d) img.src = d; });
+              item.appendChild(img);
+            }
+            if (r.mood) item.appendChild(el('div', { class: 'small', style: 'color:var(--pri);margin-bottom:4px' }, '心情：' + esc(r.mood)));
+            if (r.desc) item.appendChild(el('div', { style: 'font-size:14px;line-height:1.6;white-space:pre-wrap' }, esc(r.desc)));
+            dc.appendChild(item);
+          });
+        }
+      }
+      calHost.appendChild(dc);
+    }
+    drawCal();
 
     /* 按月对比进步 */
     b.appendChild(C.subTitle('📊 按月对比进步'));
