@@ -346,7 +346,71 @@
         { key: 'daily_quote', icon: '💬', title: '每日一句', sub: '对接欧路词典每日一句 / 内置词库', render: function (b) { b.appendChild(quoteCard()); b.appendChild(el('div', { class: 'small muted mt6' }, '提示：点「欧路」跳转官方每日一句页面，复制后可粘贴保存。')); b.appendChild(C.btn('✍️ 手动录入今日一句', 'sm mt6', function () { U.modal({ title: '录入每日一句', fields: [{ key: 'e', label: '英文' }, { key: 'z', label: '中文' }] }).then(function (x) { if (x) { s.quote = { date: U.today(), en: x.e, zh: x.z, from: '欧路词典' }; S.save(); W.render(); } }); })); } },
         { key: 'daily_mood', icon: '🌈', title: '感受', sub: '日历 + 天气温度 + 心情表情 + 当日记录', render: function (b) { moodPanel(b); } },
         { key: 'daily_qa', icon: '📝', title: '每日十问', sub: '问自己几个问题 · 月历打点 · 点击日期回看问答', open: true, render: function (b) { if (W.DailyQ) { try { W.DailyQ.render(b); } catch (e) { b.appendChild(el('div', { class: 'card', style: 'padding:12px;color:var(--red)' }, '⚠️ 每日十问渲染出错：' + ((e && e.message) || e))); if (window.console) console.error(e); } } } },
-        { key: 'daily_ck', icon: '✅', title: '打卡', sub: '横向周打卡日历，支持自定义增减任务', render: function (b) { b.appendChild(C.weekcheck('daily', { title: '每日习惯打卡' })); b.appendChild(C.subTitle('今日待办')); b.appendChild(C.tasklist('daily', { addText: '新增今日任务' })); } },
+        { key: 'daily_ck', icon: '✅', title: '打卡', sub: '横向周打卡日历，支持自定义增减任务', render: function (b) {
+          b.appendChild(C.weekcheck('daily', { title: '每日习惯打卡' }));
+
+          /* 打卡月历：有打卡的日子显示小圆点；点击日期看当天打卡记录 */
+          b.appendChild(C.subTitle('📅 打卡月历'));
+          var calHost = el('div');
+          b.appendChild(calHost);
+          var ckSelDate = null, ckYM = U.today().slice(0, 7);
+          function drawCkCal() {
+            calHost.innerHTML = '';
+            var data = S.ck('daily');
+            var y0 = +ckYM.split('-')[0], m0 = +ckYM.split('-')[1];
+            var cal = el('div', { class: 'cal' });
+            var hd = el('div', { class: 'cal-hd' });
+            hd.appendChild(C.btn('‹', 'sm', function () { var y = y0, m = m0 - 1; if (m < 1) { y--; m = 12; } ckYM = y + '-' + pad(m); ckSelDate = null; drawCkCal(); }));
+            hd.appendChild(el('div', { style: 'font-weight:650;font-size:13px' }, ckYM));
+            hd.appendChild(C.btn('›', 'sm', function () { var y = y0, m = m0 + 1; if (m > 12) { y++; m = 1; } ckYM = y + '-' + pad(m); ckSelDate = null; drawCkCal(); }));
+            cal.appendChild(hd);
+            var g = el('div', { class: 'cal-g' });
+            ['一', '二', '三', '四', '五', '六', '日'].forEach(function (w) { g.appendChild(el('div', { class: 'cal-w' }, w)); });
+            var first = new Date(y0, m0 - 1, 1), off = (first.getDay() + 6) % 7;
+            for (var i = 0; i < off; i++) g.appendChild(el('div', { class: 'cal-d out' }, ''));
+            var dim = U.daysInMonth(y0, m0);
+            for (var dd = 1; dd <= dim; dd++) {
+              (function (dd) {
+                var dk = y0 + '-' + pad(m0) + '-' + pad(dd);
+                var recs = data.rec[dk] || [];
+                var c = el('div', { class: 'cal-d' + (dk === U.today() ? ' today' : '') + (dk === ckSelDate ? ' sel' : '') });
+                c.appendChild(el('div', null, dd));
+                if (recs.length > 0) {
+                  var dot = el('div', { class: 'dt' });
+                  if (dk === ckSelDate) dot.style.background = '#fff';
+                  c.appendChild(dot);
+                }
+                c.onclick = function () { ckSelDate = dk; drawCkCal(); };
+                g.appendChild(c);
+              })(dd);
+            }
+            cal.appendChild(g);
+            calHost.appendChild(cal);
+
+            var dc = el('div', { class: 'card mt6' });
+            dc.style.padding = '14px';
+            if (!ckSelDate) {
+              dc.appendChild(el('div', { class: 'small muted', style: 'text-align:center;padding:10px 0' }, '点击上方日期，查看当天打卡记录'));
+            } else {
+              var recs = data.rec[ckSelDate] || [];
+              dc.appendChild(el('div', { style: 'font-size:14px;font-weight:600;margin-bottom:10px' }, '📅 ' + ckSelDate + (recs.length ? ' · 打卡 ' + recs.length + ' 项' : '')));
+              if (recs.length === 0) {
+                dc.appendChild(el('div', { class: 'small muted', style: 'text-align:center;padding:8px 0' }, '这一天没有打卡记录'));
+              } else {
+                recs.forEach(function (id) {
+                  var t = (data.tasks || []).filter(function (x) { return x.id === id; })[0];
+                  var nm = t ? t.name : '(已删除的任务)';
+                  dc.appendChild(el('div', { style: 'display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)' }, '✅ ' + esc(nm)));
+                });
+              }
+            }
+            calHost.appendChild(dc);
+          }
+          drawCkCal();
+
+          b.appendChild(C.subTitle('今日待办'));
+          b.appendChild(C.tasklist('daily', { addText: '新增今日任务' }));
+        } },
         { key: 'daily_calligraphy', icon: '✍️', title: '书法练习', sub: '教程视频 · 练字记录 · 月度对比 · 抖音爆款参考', render: function (b) { calligraphySection(b); } }
       ]
     });
