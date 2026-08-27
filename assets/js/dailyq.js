@@ -4,7 +4,7 @@
  * 数据：统一存于 S.get().dailyQ（随站点整体状态保存，不会因刷新丢失）
  */
 (function () {
-  var U = W.U, C = W.C, S = W.S;
+  var U = W.U, C = W.C, S = W.S, el = U.el, pad = U.pad;
   var DEFAULT_QUESTIONS = [
     "今天最想推进的一颗种子是什么？",
     "此刻是聚焦型还是发散型？",

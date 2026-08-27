@@ -249,9 +249,9 @@
       var y0 = +calYM.split('-')[0], m0 = +calYM.split('-')[1];
       var cal = el('div', { class: 'cal' });
       var hd = el('div', { class: 'cal-hd' });
-      hd.appendChild(C.btn('‹', 'sm', function () { var y = y0, m = m0 - 1; if (m < 1) { y--; m = 12; } calYM = y + '-' + pad(m); selDate = null; drawCal(); }));
+      hd.appendChild(C.btn('‹', 'sm', function () { var y = y0, m = m0 - 1; if (m < 1) { y--; m = 12; } calYM = y + '-' + U.pad(m); selDate = null; drawCal(); }));
       hd.appendChild(el('div', { style: 'font-weight:650;font-size:13px' }, calYM));
-      hd.appendChild(C.btn('›', 'sm', function () { var y = y0, m = m0 + 1; if (m > 12) { y++; m = 1; } calYM = y + '-' + pad(m); selDate = null; drawCal(); }));
+      hd.appendChild(C.btn('›', 'sm', function () { var y = y0, m = m0 + 1; if (m > 12) { y++; m = 1; } calYM = y + '-' + U.pad(m); selDate = null; drawCal(); }));
       cal.appendChild(hd);
       var g = el('div', { class: 'cal-g' });
       ['一', '二', '三', '四', '五', '六', '日'].forEach(function (w) { g.appendChild(el('div', { class: 'cal-w' }, w)); });
@@ -260,7 +260,7 @@
       var dim = U.daysInMonth(y0, m0);
       for (var dd = 1; dd <= dim; dd++) {
         (function (dd) {
-          var dk = y0 + '-' + pad(m0) + '-' + pad(dd);
+          var dk = y0 + '-' + U.pad(m0) + '-' + U.pad(dd);
           var recs = s.calligraphy.records[dk] || [];
           var c = el('div', { class: 'cal-d' + (dk === U.today() ? ' today' : '') + (dk === selDate ? ' sel' : '') });
           c.appendChild(el('div', null, dd));
@@ -360,9 +360,9 @@
             var y0 = +ckYM.split('-')[0], m0 = +ckYM.split('-')[1];
             var cal = el('div', { class: 'cal' });
             var hd = el('div', { class: 'cal-hd' });
-            hd.appendChild(C.btn('‹', 'sm', function () { var y = y0, m = m0 - 1; if (m < 1) { y--; m = 12; } ckYM = y + '-' + pad(m); ckSelDate = null; drawCkCal(); }));
+            hd.appendChild(C.btn('‹', 'sm', function () { var y = y0, m = m0 - 1; if (m < 1) { y--; m = 12; } ckYM = y + '-' + U.pad(m); ckSelDate = null; drawCkCal(); }));
             hd.appendChild(el('div', { style: 'font-weight:650;font-size:13px' }, ckYM));
-            hd.appendChild(C.btn('›', 'sm', function () { var y = y0, m = m0 + 1; if (m > 12) { y++; m = 1; } ckYM = y + '-' + pad(m); ckSelDate = null; drawCkCal(); }));
+            hd.appendChild(C.btn('›', 'sm', function () { var y = y0, m = m0 + 1; if (m > 12) { y++; m = 1; } ckYM = y + '-' + U.pad(m); ckSelDate = null; drawCkCal(); }));
             cal.appendChild(hd);
             var g = el('div', { class: 'cal-g' });
             ['一', '二', '三', '四', '五', '六', '日'].forEach(function (w) { g.appendChild(el('div', { class: 'cal-w' }, w)); });
@@ -371,7 +371,7 @@
             var dim = U.daysInMonth(y0, m0);
             for (var dd = 1; dd <= dim; dd++) {
               (function (dd) {
-                var dk = y0 + '-' + pad(m0) + '-' + pad(dd);
+                var dk = y0 + '-' + U.pad(m0) + '-' + U.pad(dd);
                 var recs = data.rec[dk] || [];
                 var c = el('div', { class: 'cal-d' + (dk === U.today() ? ' today' : '') + (dk === ckSelDate ? ' sel' : '') });
                 c.appendChild(el('div', null, dd));
